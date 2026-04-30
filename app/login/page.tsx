@@ -35,6 +35,7 @@ export default function LoginPage() {
     // 实际上 Supabase 只支持邮箱/手机号登录，我们查到用户 ID 后需要获取邮箱
     // 通过 RPC 函数获取该用户的邮箱
     const { data: emailData, error: emailError } = await supabase
+      .schema('sample_data_hub')
       .rpc('get_email_by_profile_id', { profile_id: profile.id })
 
     if (emailError || !emailData) {
