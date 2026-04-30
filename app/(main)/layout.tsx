@@ -2,10 +2,11 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { AuthProvider } from '@/lib/auth-context'
 import { useAuth } from '@/lib/auth-context'
 import MainNav from '@/components/main-nav'
 
-export default function MainLayout({
+function MainLayoutInner({
   children,
 }: {
   children: React.ReactNode
@@ -37,5 +38,17 @@ export default function MainLayout({
       />
       <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
     </div>
+  )
+}
+
+export default function MainLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <AuthProvider>
+      <MainLayoutInner>{children}</MainLayoutInner>
+    </AuthProvider>
   )
 }
