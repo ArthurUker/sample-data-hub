@@ -19,7 +19,6 @@ export default function LoginPage() {
 
     // 通过用户名直接获取对应邮箱（SECURITY DEFINER 函数，绕过 RLS）
     const { data: emailData, error: emailError } = await supabase
-      .schema('sample_data_hub')
       .rpc('get_email_by_username', { username: username.trim() })
 
     if (emailError || !emailData) {
