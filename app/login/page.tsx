@@ -38,8 +38,9 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/samples')
-    router.refresh()
+    // 用 location.href 强制完整刷新，避免 AuthProvider 状态更新前 MainLayout 就检查 user 导致竞态
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+    window.location.href = basePath + '/samples/'
   }
 
   return (
