@@ -49,17 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const supabase = createClient()
 
-    // 初始化：获取当前会话
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (user) {
-        const profile = await loadProfile(user.id)
-        setState({ user, profile, loading: false })
-      } else {
-        setState({ user: null, profile: null, loading: false })
-      }
-    })
-
-    // 监听登录状态变化
+    // 监听登录状态变化（INITIAL_SESSION 事件会在首次挂载时立即触发，用于初始化）
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
