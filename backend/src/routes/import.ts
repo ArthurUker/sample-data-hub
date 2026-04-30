@@ -157,6 +157,7 @@ router.post(
             project_name: item.project_name,
             ct_value: item.ct_value,
             raw_text: item.raw_text,
+            conclusion: item.conclusion,
             is_missing: item.is_missing,
           }))
 

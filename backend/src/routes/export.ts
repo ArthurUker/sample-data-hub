@@ -39,6 +39,9 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
       query = query.in('versions.sample_id', sampleIds)
     }
 
+    // Only export latest versions
+    query = query.eq('versions.is_latest', true)
+
     const { data, error } = await query
 
     if (error) {
