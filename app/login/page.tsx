@@ -17,26 +17,10 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
 
-    // 通过用户名查找对应邮箱
-    const { data: profile, error: profileError } = await supabase
-      .schema('sample_data_hub')
-      .from('profiles')
-      .select('id')
-      .eq('name', username.trim())
-      .maybeSingle()
-
-    if (profileError || !profile) {
-      setError('用户名或密码错误，请重试')
-      setLoading(false)
-      return
-    }
-
-    // 从 auth.users 获取邮箱（通过 admin 无法在客户端访问，改为直接用 username@internal 格式邮箱登录）
-    // 实际上 Supabase 只支持邮箱/手机号登录，我们查到用户 ID 后需要获取邮箱
-    // 通过 RPC 函数获取该用户的邮箱
+    // 通过用户名直接获取对应邮箱（SECURITY DEFINER 函数，绕过 RLS）
     const { data: emailData, error: emailError } = await supabase
       .schema('sample_data_hub')
-      .rpc('get_email_by_profile_id', { profile_id: profile.id })
+      .rpc('get_email_by_username', { username: username.trim() })
 
     if (emailError || !emailData) {
       setError('用户名或密码错误，请重试')
