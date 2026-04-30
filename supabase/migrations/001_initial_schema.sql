@@ -339,3 +339,16 @@ $$;
 
 grant execute on function sample_data_hub.get_email_by_username(text) to anon, authenticated;
 grant usage on schema sample_data_hub to anon, authenticated;
+
+-- 授予表级别访问权限（自定义 schema 需要手动 grant，不像 public schema 自动设置）
+grant select, insert, update, delete on all tables in schema sample_data_hub to authenticated;
+grant select on all tables in schema sample_data_hub to anon;
+grant usage, select on all sequences in schema sample_data_hub to authenticated;
+
+-- 确保未来新建的表也自动获得权限
+alter default privileges in schema sample_data_hub
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema sample_data_hub
+  grant select on tables to anon;
+alter default privileges in schema sample_data_hub
+  grant usage, select on sequences to authenticated;
