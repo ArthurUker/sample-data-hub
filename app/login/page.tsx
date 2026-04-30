@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -17,10 +17,39 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    // 通过用户名查找对应邮箱
+    const { data: profile, error: profileError } = await supabase
+      .schema('sample_data_hub')
+      .from('profiles')
+      .select('id')
+      .eq('name', username.trim())
+      .maybeSingle()
 
-    if (error) {
-      setError('邮箱或密码错误，请重试')
+    if (profileError || !profile) {
+      setError('用户名或密码错误，请重试')
+      setLoading(false)
+      return
+    }
+
+    // 从 auth.users 获取邮箱（通过 admin 无法在客户端访问，改为直接用 username@internal 格式邮箱登录）
+    // 实际上 Supabase 只支持邮箱/手机号登录，我们查到用户 ID 后需要获取邮箱
+    // 通过 RPC 函数获取该用户的邮箱
+    const { data: emailData, error: emailError } = await supabase
+      .rpc('get_email_by_profile_id', { profile_id: profile.id })
+
+    if (emailError || !emailData) {
+      setError('用户名或密码错误，请重试')
+      setLoading(false)
+      return
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: emailData as string,
+      password,
+    })
+
+    if (signInError) {
+      setError('用户名或密码错误，请重试')
       setLoading(false)
       return
     }
@@ -38,15 +67,16 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              邮箱
+              用户名
             </label>
             <input
-              type="email"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="you@example.com"
+              placeholder="请输入用户名"
+              autoComplete="username"
             />
           </div>
 
@@ -61,6 +91,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
+              autoComplete="current-password"
             />
           </div>
 

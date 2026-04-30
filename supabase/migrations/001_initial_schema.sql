@@ -320,3 +320,17 @@ create policy "audit_logs_select" on sample_data_hub.audit_logs
 
 create policy "audit_logs_insert" on sample_data_hub.audit_logs
   for insert with check (auth.uid() is not null);
+
+-- ============================================================
+-- 用户名登录辅助函数：根据 profile id 获取 auth 邮箱
+-- ============================================================
+create or replace function sample_data_hub.get_email_by_profile_id(profile_id uuid)
+returns text
+language sql
+security definer
+set search_path = sample_data_hub
+as $$
+  select email from auth.users where id = profile_id limit 1;
+$$;
+
+grant execute on function sample_data_hub.get_email_by_profile_id(uuid) to anon, authenticated;
