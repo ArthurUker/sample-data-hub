@@ -49,10 +49,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const supabase = createClient()
 
-    // 监听登录状态变化（INITIAL_SESSION 事件会在首次挂载时立即触发，用于初始化）
+    // 初始化：用 getSession() 读取本地缓存 session（不持有 auth lock，不与 signInWithPassword 竞争）
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user ?? null
+      if (user) {
+        const profile = await loadProfile(user.id)
+        setState({ user, profile, loading: false })
+      } else {
+        setState({ user: null, profile: null, loading: false })
+      }
+    }).catch(() => {
+      setState({ user: null, profile: null, loading: false })
+    })
+
+    // 监听后续登录/退出事件（跳过 INITIAL_SESSION，已由 getSession() 处理，避免重复锁竞争）
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'INITIAL_SESSION') return
       const user = session?.user ?? null
       if (user) {
         const profile = await loadProfile(user.id)
