@@ -338,3 +338,4 @@ as $$
 $$;
 
 grant execute on function sample_data_hub.get_email_by_username(text) to anon, authenticated;
+grant usage on schema sample_data_hub to anon, authenticated;
