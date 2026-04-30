@@ -1,63 +1,70 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/lib/auth-context'
 import SamplesFilter from './samples-filter'
 
-type SearchParams = {
-  q?: string
-  status?: string
-  comp?: string
-  page?: string
+type SampleRow = {
+  id: string
+  sample_type: string
+  sample_source: string | null
+  status: string
+  updated_at: string
+  comparison_results: Array<{ comp_status: string }>
 }
 
-export default async function SamplesPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>
-}) {
-  const params = await searchParams
-  const supabase = await createClient()
+export default function SamplesPage() {
+  const searchParams = useSearchParams()
+  const { profile } = useAuth()
 
-  const page = Number(params.page ?? 1)
+  const q = searchParams.get('q') ?? ''
+  const status = searchParams.get('status') ?? ''
+  const comp = searchParams.get('comp') ?? ''
+  const page = Number(searchParams.get('page') ?? 1)
   const pageSize = 20
-  const from = (page - 1) * pageSize
-  const to = from + pageSize - 1
 
-  let query = supabase
-    .from('samples')
-    .select(
-      `id, sample_type, sample_source, status, final_version_id, created_at, updated_at,
-       comparison_results(comp_status)`,
-      { count: 'exact' }
-    )
-    .order('updated_at', { ascending: false })
-    .range(from, to)
+  const [samples, setSamples] = useState<SampleRow[]>([])
+  const [count, setCount] = useState(0)
+  const [loading, setLoading] = useState(true)
 
-  if (params.q) {
-    query = query.ilike('id', `%${params.q}%`)
-  }
-  if (params.status) {
-    query = query.eq('status', params.status)
-  }
+  const fetchSamples = useCallback(async () => {
+    setLoading(true)
+    const supabase = createClient()
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
 
-  const { data: samples, count } = await query
-
-  // 过滤比对状态（前端过滤，数量有限时可用）
-  let filtered = samples ?? []
-  if (params.comp === 'divergent') {
-    filtered = filtered.filter((s) =>
-      (s.comparison_results as Array<{ comp_status: string }>)?.some(
-        (r) => r.comp_status === 'DIVERGENT'
+    let query = supabase
+      .from('samples')
+      .select(
+        `id, sample_type, sample_source, status, updated_at, comparison_results(comp_status)`,
+        { count: 'exact' }
       )
-    )
-  }
+      .order('updated_at', { ascending: false })
+      .range(from, to)
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .single()
+    if (q) query = query.ilike('id', `%${q}%`)
+    if (status) query = query.eq('status', status)
 
-  const canCreate =
-    profile?.role === 'ADMIN' || profile?.role === 'OPERATOR'
+    const { data, count: total } = await query
+    let rows = (data ?? []) as SampleRow[]
+    if (comp === 'divergent') {
+      rows = rows.filter((s) =>
+        s.comparison_results?.some((r) => r.comp_status === 'DIVERGENT')
+      )
+    }
+    setSamples(rows)
+    setCount(total ?? 0)
+    setLoading(false)
+  }, [q, status, comp, page, pageSize])
+
+  useEffect(() => {
+    fetchSamples()
+  }, [fetchSamples])
+
+  const canCreate = profile?.role === 'ADMIN' || profile?.role === 'OPERATOR'
 
   const statusLabel: Record<string, string> = {
     PENDING: '待处理',
@@ -71,14 +78,14 @@ export default async function SamplesPage({
     FINALIZED: 'bg-green-100 text-green-700',
   }
 
-  const totalPages = Math.ceil((count ?? 0) / pageSize)
+  const totalPages = Math.ceil(count / pageSize)
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">样本台账</h1>
-          <p className="text-sm text-gray-500 mt-0.5">共 {count ?? 0} 条样本</p>
+          <p className="text-sm text-gray-500 mt-0.5">共 {count} 条样本</p>
         </div>
         {canCreate && (
           <Link
@@ -90,100 +97,100 @@ export default async function SamplesPage({
         )}
       </div>
 
-      <SamplesFilter initialParams={params} />
+      <SamplesFilter initialParams={{ q, status, comp }} />
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-4">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">样本编号</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">样本类型</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">来源</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">状态</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">比对</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">更新时间</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filtered.length === 0 && (
+        {loading ? (
+          <div className="px-4 py-8 text-center text-gray-400 text-sm">加载中...</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                  暂无样本数据
-                </td>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">样本编号</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">样本类型</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">来源</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">状态</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">比对</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">更新时间</th>
+                <th className="px-4 py-3"></th>
               </tr>
-            )}
-            {filtered.map((sample) => {
-              const compResults = sample.comparison_results as Array<{
-                comp_status: string
-              }>
-              const hasDivergent = compResults?.some(
-                (r) => r.comp_status === 'DIVERGENT'
-              )
-              const hasMissing = compResults?.some(
-                (r) => r.comp_status === 'MISSING_DATA'
-              )
-
-              return (
-                <tr key={sample.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-mono font-medium text-gray-900">
-                    {sample.id}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{sample.sample_type}</td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {sample.sample_source ?? '-'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        statusColor[sample.status] ?? 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      {statusLabel[sample.status] ?? sample.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {hasDivergent ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-                        有差异
-                      </span>
-                    ) : hasMissing ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
-                        缺失
-                      </span>
-                    ) : compResults?.length > 0 ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                        一致
-                      </span>
-                    ) : (
-                      <span className="text-gray-400 text-xs">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {new Date(sample.updated_at).toLocaleDateString('zh-CN')}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/samples/${sample.id}`}
-                      className="text-blue-600 hover:text-blue-800 text-xs"
-                    >
-                      查看
-                    </Link>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {samples.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                    暂无样本数据
                   </td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              )}
+              {samples.map((sample) => {
+                const hasDivergent = sample.comparison_results?.some(
+                  (r) => r.comp_status === 'DIVERGENT'
+                )
+                const hasMissing = sample.comparison_results?.some(
+                  (r) => r.comp_status === 'MISSING_DATA'
+                )
+
+                return (
+                  <tr key={sample.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-mono font-medium text-gray-900">
+                      {sample.id}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">{sample.sample_type}</td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {sample.sample_source ?? '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          statusColor[sample.status] ?? 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {statusLabel[sample.status] ?? sample.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {hasDivergent ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          有差异
+                        </span>
+                      ) : hasMissing ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                          缺失
+                        </span>
+                      ) : sample.comparison_results?.length > 0 ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                          一致
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {new Date(sample.updated_at).toLocaleDateString('zh-CN')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/samples/detail?id=${sample.id}`}
+                        className="text-blue-600 hover:text-blue-800 text-xs"
+                      >
+                        查看
+                      </Link>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* 分页 */}
       {totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-4">
           {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
             <Link
               key={p}
-              href={`/samples?page=${p}${params.q ? `&q=${params.q}` : ''}${params.status ? `&status=${params.status}` : ''}`}
+              href={`/samples?page=${p}${q ? `&q=${q}` : ''}${status ? `&status=${status}` : ''}`}
               className={`px-3 py-1 text-sm rounded-md border ${
                 p === page
                   ? 'bg-blue-600 text-white border-blue-600'

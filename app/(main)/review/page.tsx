@@ -1,40 +1,70 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/lib/auth-context'
 
-export default async function ReviewPage() {
-  const supabase = await createClient()
+type ReviewSample = {
+  id: string
+  sample_type: string
+  sample_source: string | null
+  updated_at: string
+  comparison_results: Array<{
+    project_name: string
+    ct_diff: number | null
+    threshold: number
+    comp_status: string
+  }>
+}
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .single()
+export default function ReviewPage() {
+  const router = useRouter()
+  const { profile, loading: authLoading } = useAuth()
+  const [samples, setSamples] = useState<ReviewSample[]>([])
+  const [count, setCount] = useState(0)
+  const [loading, setLoading] = useState(true)
 
-  if (profile?.role !== 'ADMIN' && profile?.role !== 'REVIEWER') {
-    redirect('/samples')
-  }
+  useEffect(() => {
+    if (authLoading) return
+    if (profile && profile.role !== 'ADMIN' && profile.role !== 'REVIEWER') {
+      router.replace('/samples')
+      return
+    }
+    const supabase = createClient()
+    supabase
+      .from('samples')
+      .select(
+        `id, sample_type, sample_source, updated_at,
+         comparison_results(project_name, ct_diff, threshold, comp_status)`,
+        { count: 'exact' }
+      )
+      .eq('status', 'IN_REVIEW')
+      .order('updated_at', { ascending: false })
+      .then(({ data, count: total }) => {
+        setSamples((data ?? []) as ReviewSample[])
+        setCount(total ?? 0)
+        setLoading(false)
+      })
+  }, [profile, authLoading, router])
 
-  // 查询所有需要审核的样本（状态为 IN_REVIEW）
-  const { data: samples, count } = await supabase
-    .from('samples')
-    .select(
-      `id, sample_type, sample_source, updated_at,
-       comparison_results(project_name, ct_diff, threshold, comp_status)`,
-      { count: 'exact' }
+  if (loading || authLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-sm text-gray-400">
+        加载中...
+      </div>
     )
-    .eq('status', 'IN_REVIEW')
-    .order('updated_at', { ascending: false })
+  }
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-900">差异审核</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          共 {count ?? 0} 个样本待审核
-        </p>
+        <p className="text-sm text-gray-500 mt-0.5">共 {count} 个样本待审核</p>
       </div>
 
-      {(!samples || samples.length === 0) ? (
+      {samples.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <p className="text-gray-400 text-sm">暂无需要审核的样本</p>
           <Link
@@ -47,14 +77,9 @@ export default async function ReviewPage() {
       ) : (
         <div className="space-y-4">
           {samples.map((sample) => {
-            const divergentProjects = (
-              sample.comparison_results as Array<{
-                project_name: string
-                ct_diff: number | null
-                threshold: number
-                comp_status: string
-              }>
-            )?.filter((r) => r.comp_status === 'DIVERGENT') ?? []
+            const divergentProjects = sample.comparison_results?.filter(
+              (r) => r.comp_status === 'DIVERGENT'
+            ) ?? []
 
             return (
               <div
@@ -79,7 +104,7 @@ export default async function ReviewPage() {
                     </p>
                   </div>
                   <Link
-                    href={`/samples/${sample.id}`}
+                    href={`/samples/detail?id=${sample.id}`}
                     className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     进入审核

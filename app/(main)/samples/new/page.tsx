@@ -45,7 +45,7 @@ export default function NewSamplePage() {
       return
     }
 
-    router.push(`/samples/${form.id}`)
+    router.push(`/samples/detail?id=${form.id}`)
   }
 
   return (

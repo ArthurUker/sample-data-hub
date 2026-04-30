@@ -17,3 +17,4 @@
 - `docs/03-page-flow-draft.md`：页面结构与核心流程草案
 - `docs/04-development-roadmap.md`：开发路线与阶段目标
 - `docs/05-tech-spec.md`：技术架构方案（技术选型、DB Schema、API 设计、权限矩阵）
+- `docs/06-pages-railway-refactor-checklist.md`：GitHub Pages + Railway 改造清单（前后端拆分、部署与联调）

@@ -1,24 +1,33 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth-context'
 import MainNav from '@/components/main-nav'
 
-export default async function MainLayout({
+export default function MainLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, profile, loading } = useAuth()
+  const router = useRouter()
 
-  if (!user) redirect('/login')
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/login')
+    }
+  }, [loading, user, router])
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('name, role')
-    .eq('id', user.id)
-    .single()
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-sm text-gray-400">加载中...</p>
+      </div>
+    )
+  }
+
+  if (!user) return null
 
   return (
     <div className="min-h-screen bg-gray-50">

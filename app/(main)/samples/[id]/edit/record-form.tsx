@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { triggerCompare } from '@/lib/api-client'
 
 type Site = { id: string; name: string }
 
@@ -162,10 +163,10 @@ export default function RecordForm({
 
     await supabase.from('version_snapshots').insert(snapshots)
 
-    // 7. 触发比对计算（调用 API Route）
-    await fetch(`/api/samples/${sampleId}/compare`, { method: 'POST' })
+    // 7. 触发比对计算（调用 Railway 后端）
+    await triggerCompare(sampleId)
 
-    router.push(`/samples/${sampleId}`)
+    router.push(`/samples/detail?id=${sampleId}`)
     router.refresh()
   }
 

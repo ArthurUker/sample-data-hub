@@ -1,17 +1,42 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth-context'
+import { downloadTemplate } from '@/lib/api-client'
 import ImportClient from './import-client'
 
-export default async function ImportPage() {
-  const supabase = await createClient()
+export default function ImportPage() {
+  const router = useRouter()
+  const { profile, loading: authLoading } = useAuth()
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .single()
+  useEffect(() => {
+    if (authLoading) return
+    if (profile && profile.role !== 'ADMIN' && profile.role !== 'OPERATOR') {
+      router.replace('/samples')
+    }
+  }, [profile, authLoading, router])
 
-  if (profile?.role !== 'ADMIN' && profile?.role !== 'OPERATOR') {
-    redirect('/samples')
+  async function handleDownloadTemplate() {
+    try {
+      const blob = await downloadTemplate()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'import_template.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('模板下载失败')
+    }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-sm text-gray-400">
+        加载中...
+      </div>
+    )
   }
 
   return (
@@ -23,12 +48,12 @@ export default async function ImportPage() {
             批量导入检测记录；每行代表一个检测项目
           </p>
         </div>
-        <a
-          href="/api/export/template"
+        <button
+          onClick={handleDownloadTemplate}
           className="text-blue-600 text-sm hover:underline"
         >
           下载导入模板
-        </a>
+        </button>
       </div>
       <ImportClient />
     </div>

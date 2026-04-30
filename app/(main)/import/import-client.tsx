@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { parseExcelFile } from '@/lib/excel'
+import { triggerCompare } from '@/lib/api-client'
 import type { ExcelImportRow } from '@/types'
 
 type ImportStatus = 'idle' | 'parsing' | 'preview' | 'importing' | 'done'
@@ -188,7 +189,7 @@ export default function ImportClient() {
         }
 
         // 触发比对计算
-        await fetch(`/api/samples/${sampleId}/compare`, { method: 'POST' })
+        await triggerCompare(sampleId)
         imported++
       } catch (err) {
         errors.push(err instanceof Error ? err.message : `样本 ${sampleId} 导入失败`)

@@ -3,6 +3,10 @@
 -- Sample Data Hub - 初始化数据库结构
 -- ============================================================
 
+-- 共享 Supabase 项目隔离：本项目所有业务对象放在独立 schema
+create schema if not exists sample_data_hub;
+set search_path = sample_data_hub, public;
+
 -- 枚举类型
 create type user_role as enum ('ADMIN', 'OPERATOR', 'REVIEWER', 'VIEWER');
 create type sample_status as enum ('PENDING', 'IN_REVIEW', 'FINALIZED');
@@ -14,7 +18,7 @@ create type review_conclusion as enum ('ACCEPTED', 'REJECTED');
 -- ============================================================
 -- 站点表
 -- ============================================================
-create table public.sites (
+create table sample_data_hub.sites (
   id         uuid primary key default gen_random_uuid(),
   name       text not null unique,
   created_at timestamptz not null default now()
@@ -24,19 +28,19 @@ create table public.sites (
 -- 用户扩展表（profiles）
 -- auth.users 由 Supabase Auth 管理，profiles 存业务字段
 -- ============================================================
-create table public.profiles (
+create table sample_data_hub.profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
   name       text not null,
   role       user_role not null default 'VIEWER',
-  site_id    uuid references public.sites(id),
+  site_id    uuid references sample_data_hub.sites(id),
   created_at timestamptz not null default now()
 );
 
 -- 新用户注册后自动创建 profile
-create or replace function public.handle_new_user()
+create or replace function sample_data_hub.handle_new_user()
 returns trigger language plpgsql security definer as $$
 begin
-  insert into public.profiles (id, name)
+  insert into sample_data_hub.profiles (id, name)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1))
@@ -45,14 +49,14 @@ begin
 end;
 $$;
 
-create trigger on_auth_user_created
+create trigger on_auth_user_created_sample_data_hub
   after insert on auth.users
-  for each row execute procedure public.handle_new_user();
+  for each row execute procedure sample_data_hub.handle_new_user();
 
 -- ============================================================
 -- 样本表
 -- ============================================================
-create table public.samples (
+create table sample_data_hub.samples (
   id               text primary key,
   sample_type      text not null,
   sample_source    text,
@@ -67,20 +71,20 @@ create table public.samples (
 -- ============================================================
 -- 检测记录表
 -- ============================================================
-create table public.detection_records (
+create table sample_data_hub.detection_records (
   id          uuid primary key default gen_random_uuid(),
-  sample_id   text not null references public.samples(id),
-  site_id     uuid not null references public.sites(id),
+  sample_id   text not null references sample_data_hub.samples(id),
+  site_id     uuid not null references sample_data_hub.sites(id),
   source_type source_type not null default 'MANUAL',
-  operator_id uuid not null references public.profiles(id),
+  operator_id uuid not null references sample_data_hub.profiles(id),
   remark      text,
   created_at  timestamptz not null default now()
 );
 
 -- 检测项目明细表
-create table public.detection_items (
+create table sample_data_hub.detection_items (
   id           uuid primary key default gen_random_uuid(),
-  record_id    uuid not null references public.detection_records(id) on delete cascade,
+  record_id    uuid not null references sample_data_hub.detection_records(id) on delete cascade,
   project_name text not null,
   ct_value     numeric,
   raw_text     text,
@@ -92,13 +96,13 @@ create table public.detection_items (
 -- ============================================================
 -- 版本表（完整快照策略）
 -- ============================================================
-create table public.versions (
+create table sample_data_hub.versions (
   id          uuid primary key default gen_random_uuid(),
-  sample_id   text not null references public.samples(id),
-  record_id   uuid not null references public.detection_records(id),
+  sample_id   text not null references sample_data_hub.samples(id),
+  record_id   uuid not null references sample_data_hub.detection_records(id),
   version_no  integer not null,
   action_type version_action not null,
-  operator_id uuid not null references public.profiles(id),
+  operator_id uuid not null references sample_data_hub.profiles(id),
   note        text,
   is_latest   boolean not null default true,
   is_final    boolean not null default false,
@@ -106,12 +110,12 @@ create table public.versions (
 );
 
 create unique index versions_record_versionno_idx
-  on public.versions(record_id, version_no);
+  on sample_data_hub.versions(record_id, version_no);
 
 -- 版本快照明细
-create table public.version_snapshots (
+create table sample_data_hub.version_snapshots (
   id           uuid primary key default gen_random_uuid(),
-  version_id   uuid not null references public.versions(id) on delete cascade,
+  version_id   uuid not null references sample_data_hub.versions(id) on delete cascade,
   project_name text not null,
   ct_value     numeric,
   raw_text     text,
@@ -121,16 +125,16 @@ create table public.version_snapshots (
 );
 
 -- 补充 samples 的 final_version_id 外键
-alter table public.samples
+alter table sample_data_hub.samples
   add constraint samples_final_version_fk
-  foreign key (final_version_id) references public.versions(id);
+  foreign key (final_version_id) references sample_data_hub.versions(id);
 
 -- ============================================================
 -- 比对结果表
 -- ============================================================
-create table public.comparison_results (
+create table sample_data_hub.comparison_results (
   id            uuid primary key default gen_random_uuid(),
-  sample_id     text not null references public.samples(id),
+  sample_id     text not null references sample_data_hub.samples(id),
   project_name  text not null,
   version_ids   uuid[] not null,
   min_ct        numeric,
@@ -146,11 +150,11 @@ create table public.comparison_results (
 -- ============================================================
 -- 审核结果表
 -- ============================================================
-create table public.reviews (
+create table sample_data_hub.reviews (
   id                   uuid primary key default gen_random_uuid(),
-  sample_id            text not null references public.samples(id),
-  reviewer_id          uuid not null references public.profiles(id),
-  selected_version_id  uuid not null references public.versions(id),
+  sample_id            text not null references sample_data_hub.samples(id),
+  reviewer_id          uuid not null references sample_data_hub.profiles(id),
+  selected_version_id  uuid not null references sample_data_hub.versions(id),
   conclusion           review_conclusion not null,
   remark               text,
   is_effective         boolean not null default true,
@@ -160,21 +164,21 @@ create table public.reviews (
 -- ============================================================
 -- 系统参数表
 -- ============================================================
-create table public.system_config (
+create table sample_data_hub.system_config (
   key        text primary key,
   value      text not null,
   updated_at timestamptz not null default now()
 );
 
 -- 初始阈值
-insert into public.system_config (key, value) values ('ct_diff_threshold', '2');
+insert into sample_data_hub.system_config (key, value) values ('ct_diff_threshold', '2');
 
 -- ============================================================
 -- 操作日志表
 -- ============================================================
-create table public.audit_logs (
+create table sample_data_hub.audit_logs (
   id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references public.profiles(id),
+  user_id     uuid not null references sample_data_hub.profiles(id),
   action      text not null,
   entity_type text not null,
   entity_id   text not null,
@@ -185,7 +189,7 @@ create table public.audit_logs (
 -- ============================================================
 -- updated_at 自动更新触发器
 -- ============================================================
-create or replace function public.set_updated_at()
+create or replace function sample_data_hub.set_updated_at()
 returns trigger language plpgsql as $$
 begin
   new.updated_at = now();
@@ -194,125 +198,125 @@ end;
 $$;
 
 create trigger samples_updated_at
-  before update on public.samples
-  for each row execute procedure public.set_updated_at();
+  before update on sample_data_hub.samples
+  for each row execute procedure sample_data_hub.set_updated_at();
 
 -- ============================================================
 -- Row Level Security
 -- ============================================================
-alter table public.profiles enable row level security;
-alter table public.sites enable row level security;
-alter table public.samples enable row level security;
-alter table public.detection_records enable row level security;
-alter table public.detection_items enable row level security;
-alter table public.versions enable row level security;
-alter table public.version_snapshots enable row level security;
-alter table public.comparison_results enable row level security;
-alter table public.reviews enable row level security;
-alter table public.system_config enable row level security;
-alter table public.audit_logs enable row level security;
+alter table sample_data_hub.profiles enable row level security;
+alter table sample_data_hub.sites enable row level security;
+alter table sample_data_hub.samples enable row level security;
+alter table sample_data_hub.detection_records enable row level security;
+alter table sample_data_hub.detection_items enable row level security;
+alter table sample_data_hub.versions enable row level security;
+alter table sample_data_hub.version_snapshots enable row level security;
+alter table sample_data_hub.comparison_results enable row level security;
+alter table sample_data_hub.reviews enable row level security;
+alter table sample_data_hub.system_config enable row level security;
+alter table sample_data_hub.audit_logs enable row level security;
 
 -- 辅助函数：获取当前用户角色
-create or replace function public.current_user_role()
+create or replace function sample_data_hub.current_user_role()
 returns user_role language sql security definer stable as $$
-  select role from public.profiles where id = auth.uid();
+  select role from sample_data_hub.profiles where id = auth.uid();
 $$;
 
 -- profiles：本人可读自己，ADMIN 可读所有
-create policy "profiles_select_own" on public.profiles
-  for select using (id = auth.uid() or public.current_user_role() = 'ADMIN');
+create policy "profiles_select_own" on sample_data_hub.profiles
+  for select using (id = auth.uid() or sample_data_hub.current_user_role() = 'ADMIN');
 
-create policy "profiles_update_own" on public.profiles
+create policy "profiles_update_own" on sample_data_hub.profiles
   for update using (id = auth.uid());
 
 -- sites：所有登录用户可读
-create policy "sites_select" on public.sites
+create policy "sites_select" on sample_data_hub.sites
   for select using (auth.uid() is not null);
 
-create policy "sites_insert" on public.sites
-  for insert with check (public.current_user_role() = 'ADMIN');
+create policy "sites_insert" on sample_data_hub.sites
+  for insert with check (sample_data_hub.current_user_role() = 'ADMIN');
 
-create policy "sites_update" on public.sites
-  for update using (public.current_user_role() = 'ADMIN');
+create policy "sites_update" on sample_data_hub.sites
+  for update using (sample_data_hub.current_user_role() = 'ADMIN');
 
 -- samples：所有登录用户可读；ADMIN/OPERATOR 可写
-create policy "samples_select" on public.samples
+create policy "samples_select" on sample_data_hub.samples
   for select using (auth.uid() is not null);
 
-create policy "samples_insert" on public.samples
+create policy "samples_insert" on sample_data_hub.samples
   for insert with check (
-    public.current_user_role() in ('ADMIN', 'OPERATOR')
+    sample_data_hub.current_user_role() in ('ADMIN', 'OPERATOR')
   );
 
-create policy "samples_update" on public.samples
+create policy "samples_update" on sample_data_hub.samples
   for update using (
-    public.current_user_role() in ('ADMIN', 'OPERATOR', 'REVIEWER')
+    sample_data_hub.current_user_role() in ('ADMIN', 'OPERATOR', 'REVIEWER')
   );
 
 -- detection_records：所有登录用户可读；ADMIN/OPERATOR 可写
-create policy "detection_records_select" on public.detection_records
+create policy "detection_records_select" on sample_data_hub.detection_records
   for select using (auth.uid() is not null);
 
-create policy "detection_records_insert" on public.detection_records
+create policy "detection_records_insert" on sample_data_hub.detection_records
   for insert with check (
-    public.current_user_role() in ('ADMIN', 'OPERATOR')
+    sample_data_hub.current_user_role() in ('ADMIN', 'OPERATOR')
   );
 
 -- detection_items：所有登录用户可读；ADMIN/OPERATOR 可写
-create policy "detection_items_select" on public.detection_items
+create policy "detection_items_select" on sample_data_hub.detection_items
   for select using (auth.uid() is not null);
 
-create policy "detection_items_insert" on public.detection_items
+create policy "detection_items_insert" on sample_data_hub.detection_items
   for insert with check (
-    public.current_user_role() in ('ADMIN', 'OPERATOR')
+    sample_data_hub.current_user_role() in ('ADMIN', 'OPERATOR')
   );
 
 -- versions：所有登录用户可读；ADMIN/OPERATOR 可写
-create policy "versions_select" on public.versions
+create policy "versions_select" on sample_data_hub.versions
   for select using (auth.uid() is not null);
 
-create policy "versions_insert" on public.versions
+create policy "versions_insert" on sample_data_hub.versions
   for insert with check (
-    public.current_user_role() in ('ADMIN', 'OPERATOR')
+    sample_data_hub.current_user_role() in ('ADMIN', 'OPERATOR')
   );
 
-create policy "versions_update" on public.versions
+create policy "versions_update" on sample_data_hub.versions
   for update using (
-    public.current_user_role() in ('ADMIN', 'REVIEWER')
+    sample_data_hub.current_user_role() in ('ADMIN', 'REVIEWER')
   );
 
 -- version_snapshots：所有登录用户可读；ADMIN/OPERATOR 可写
-create policy "version_snapshots_select" on public.version_snapshots
+create policy "version_snapshots_select" on sample_data_hub.version_snapshots
   for select using (auth.uid() is not null);
 
-create policy "version_snapshots_insert" on public.version_snapshots
+create policy "version_snapshots_insert" on sample_data_hub.version_snapshots
   for insert with check (
-    public.current_user_role() in ('ADMIN', 'OPERATOR')
+    sample_data_hub.current_user_role() in ('ADMIN', 'OPERATOR')
   );
 
 -- comparison_results：所有登录用户可读；系统（service_role）可写
-create policy "comparison_results_select" on public.comparison_results
+create policy "comparison_results_select" on sample_data_hub.comparison_results
   for select using (auth.uid() is not null);
 
 -- reviews：所有登录用户可读；ADMIN/REVIEWER 可写
-create policy "reviews_select" on public.reviews
+create policy "reviews_select" on sample_data_hub.reviews
   for select using (auth.uid() is not null);
 
-create policy "reviews_insert" on public.reviews
+create policy "reviews_insert" on sample_data_hub.reviews
   for insert with check (
-    public.current_user_role() in ('ADMIN', 'REVIEWER')
+    sample_data_hub.current_user_role() in ('ADMIN', 'REVIEWER')
   );
 
 -- system_config：所有登录用户可读；仅 ADMIN 可写
-create policy "system_config_select" on public.system_config
+create policy "system_config_select" on sample_data_hub.system_config
   for select using (auth.uid() is not null);
 
-create policy "system_config_update" on public.system_config
-  for update using (public.current_user_role() = 'ADMIN');
+create policy "system_config_update" on sample_data_hub.system_config
+  for update using (sample_data_hub.current_user_role() = 'ADMIN');
 
 -- audit_logs：所有登录用户可读
-create policy "audit_logs_select" on public.audit_logs
+create policy "audit_logs_select" on sample_data_hub.audit_logs
   for select using (auth.uid() is not null);
 
-create policy "audit_logs_insert" on public.audit_logs
+create policy "audit_logs_insert" on sample_data_hub.audit_logs
   for insert with check (auth.uid() is not null);
