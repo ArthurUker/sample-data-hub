@@ -27,7 +27,7 @@ export default function EditSampleClient() {
     Promise.all([
       supabase.from('samples').select('id, sample_type').eq('id', id).single(),
       supabase.from('sites').select('id, name').order('name'),
-    ]).then(([{ data: sampleData }, { data: sitesData }]) => {
+    ]).then(([{ data: sampleData }, { data: sitesData }]: [{ data: { id: string; sample_type: string } | null; error: unknown }, { data: Array<{ id: string; name: string }> | null; error: unknown }]) => {
       if (!sampleData) { router.replace('/samples'); return }
       setSample(sampleData)
       setSites(sitesData ?? [])

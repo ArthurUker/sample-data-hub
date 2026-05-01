@@ -8,7 +8,7 @@ import {
   useCallback,
 } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { User } from '@supabase/supabase-js'
+import type { User, Session } from '@supabase/supabase-js'
 import type { UserRole } from '@/types'
 
 type Profile = {
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = createClient()
 
     // 初始化：用 getSession() 读取本地缓存 session（不持有 auth lock，不与 signInWithPassword 竞争）
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }: { data: { session: Session | null } }) => {
       const user = session?.user ?? null
       if (user) {
         const profile = await loadProfile(user.id)
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 监听后续登录/退出事件（跳过 INITIAL_SESSION，已由 getSession() 处理，避免重复锁竞争）
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event: string, session: Session | null) => {
       if (event === 'INITIAL_SESSION') return
       const user = session?.user ?? null
       if (user) {

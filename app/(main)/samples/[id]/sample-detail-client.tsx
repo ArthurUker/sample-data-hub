@@ -43,7 +43,7 @@ export default function SampleDetailClient() {
       )
       .eq('id', id)
       .single()
-      .then(({ data }) => {
+      .then(({ data }: { data: Record<string, unknown> | null; error: unknown }) => {
         if (!data) router.replace('/samples')
         setSample(data)
         setLoading(false)
