@@ -42,7 +42,7 @@ export default function ReviewPage() {
       )
       .eq('status', 'IN_REVIEW')
       .order('updated_at', { ascending: false })
-      .then(({ data, count: total }) => {
+      .then(({ data, count: total }: { data: ReviewSample[] | null; count: number | null; error: unknown }) => {
         setSamples((data ?? []) as ReviewSample[])
         setCount(total ?? 0)
         setLoading(false)
