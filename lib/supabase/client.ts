@@ -1,8 +1,10 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-let browserClient: ReturnType<typeof createBrowserClient> | null = null
+type BrowserClient = ReturnType<typeof createBrowserClient>
 
-export function createClient() {
+let browserClient: BrowserClient | null = null
+
+export function createClient(): BrowserClient {
   if (browserClient) return browserClient
 
   const schema = process.env.NEXT_PUBLIC_SUPABASE_DB_SCHEMA ?? 'sample_data_hub'
