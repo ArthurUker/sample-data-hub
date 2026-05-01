@@ -21,5 +21,5 @@ export function createClient() {
     }
   )
 
-  return browserClient
+  return browserClient!
 }
