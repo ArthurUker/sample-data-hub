@@ -16,30 +16,43 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
 
-    // 通过用户名直接获取对应邮箱（SECURITY DEFINER 函数，绕过 RLS）
-    const { data: emailData, error: emailError } = await supabase
-      .rpc('get_email_by_username', { username: username.trim() })
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
+      const resp = await fetch(`${apiBase}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      })
 
-    if (emailError || !emailData) {
-      setError('用户名或密码错误，请重试')
+      if (!resp.ok) {
+        setError('用户名或密码错误，请重试')
+        setLoading(false)
+        return
+      }
+
+      const loginData = (await resp.json()) as {
+        accessToken: string
+        refreshToken: string
+      }
+
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: loginData.accessToken,
+        refresh_token: loginData.refreshToken,
+      })
+
+      if (setSessionError) {
+        setError('登录状态建立失败，请重试')
+        setLoading(false)
+        return
+      }
+
+      // 用 location.href 强制完整刷新，避免 AuthProvider 状态更新前 MainLayout 就检查 user 导致竞态
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+      window.location.href = basePath + '/samples/'
+    } catch {
+      setError('登录失败，请稍后再试')
       setLoading(false)
-      return
     }
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: emailData as string,
-      password,
-    })
-
-    if (signInError) {
-      setError('用户名或密码错误，请重试')
-      setLoading(false)
-      return
-    }
-
-    // 用 location.href 强制完整刷新，避免 AuthProvider 状态更新前 MainLayout 就检查 user 导致竞态
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
-    window.location.href = basePath + '/samples/'
   }
 
   return (

@@ -6,6 +6,8 @@ import healthRouter from './routes/health'
 import exportRouter from './routes/export'
 import importRouter from './routes/import'
 import samplesRouter from './routes/samples'
+import authRouter from './routes/auth'
+import { startLoginAttemptCleanupJob } from './lib/login-attempt-cleanup'
 
 const app = express()
 const PORT = parseInt(process.env.PORT ?? '4000', 10)
@@ -29,6 +31,7 @@ app.use('/health', healthRouter)
 app.use('/api/export', exportRouter)
 app.use('/api/import', importRouter)
 app.use('/api/samples', samplesRouter)
+app.use('/api/auth', authRouter)
 
 // ——— 404 fallback ———
 app.use((_req, res) => {
@@ -50,6 +53,7 @@ app.use(
 
 app.listen(PORT, () => {
   console.log(`[backend] listening on http://localhost:${PORT}`)
+  startLoginAttemptCleanupJob()
 })
 
 export default app

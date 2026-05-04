@@ -2,10 +2,13 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.SUPABASE_URL!
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const anonKey = process.env.SUPABASE_ANON_KEY!
 const schema = process.env.SUPABASE_DB_SCHEMA ?? 'sample_data_hub'
 
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set')
+if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+  throw new Error(
+    'SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SUPABASE_ANON_KEY must be set'
+  )
 }
 
 /**
@@ -20,8 +23,7 @@ export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
 /**
  * Verify a Supabase JWT and return the user, using the anon key for user context.
  */
-export const supabaseAnon = createClient(
-  supabaseUrl,
-  process.env.SUPABASE_ANON_KEY ?? serviceRoleKey,
-  { db: { schema }, auth: { persistSession: false } }
-)
+export const supabaseAnon = createClient(supabaseUrl, anonKey, {
+  db: { schema },
+  auth: { persistSession: false },
+})
