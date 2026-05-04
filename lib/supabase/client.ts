@@ -1,6 +1,6 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js'
 
-type BrowserClient = ReturnType<typeof createBrowserClient>
+type BrowserClient = SupabaseClient<any, any, any>
 
 let browserClient: BrowserClient | null = null
 
@@ -9,14 +9,14 @@ export function createClient(): BrowserClient {
 
   const schema = process.env.NEXT_PUBLIC_SUPABASE_DB_SCHEMA ?? 'sample_data_hub'
 
-  browserClient = createBrowserClient(
+  browserClient = createSupabaseClient<any>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      db: { schema },
+      db: { schema: schema as any },
       auth: {
         persistSession: true,
-        // 静态导出场景：显式指定 localStorage 作为 session 存储介质，确保页面刷新后 session 不丢失
+        // 静态站点场景：统一使用 localStorage 持久化会话，避免 cookie 路径/编码差异导致的会话读取失败。
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
         detectSessionInUrl: false,
       },

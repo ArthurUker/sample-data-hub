@@ -49,11 +49,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = createClient()
     try {
       const { data } = (await withTimeout(
-        supabase
-          .from('profiles')
-          .select('id, name, role')
-          .eq('id', userId)
-          .single(),
+        Promise.resolve(
+          supabase
+            .from('profiles')
+            .select('id, name, role')
+            .eq('id', userId)
+            .single()
+        ),
         8000
       )) as { data: Profile | null }
       return (data ?? null) as Profile | null
