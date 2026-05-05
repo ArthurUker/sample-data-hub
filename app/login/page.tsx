@@ -11,6 +11,36 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  function persistSessionFallback(data: {
+    accessToken: string
+    refreshToken: string
+    expiresIn?: number
+    tokenType?: string
+    user?: unknown
+  }) {
+    if (typeof window === 'undefined') return
+
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+      const projectRef = new URL(supabaseUrl).hostname.split('.')[0]
+      const storageKey = `sb-${projectRef}-auth-token`
+      const nowSec = Math.floor(Date.now() / 1000)
+
+      const payload = {
+        access_token: data.accessToken,
+        refresh_token: data.refreshToken,
+        user: data.user ?? null,
+        token_type: data.tokenType ?? 'bearer',
+        expires_in: data.expiresIn ?? 3600,
+        expires_at: nowSec + (data.expiresIn ?? 3600),
+      }
+
+      window.localStorage.setItem(storageKey, JSON.stringify(payload))
+    } catch {
+      // Ignore fallback storage errors and continue to normal setSession flow.
+    }
+  }
+
   async function waitForSessionReady(maxAttempts = 10, intervalMs = 120) {
     for (let i = 0; i < maxAttempts; i += 1) {
       const {
@@ -44,14 +74,31 @@ export default function LoginPage() {
       const loginData = (await resp.json()) as {
         accessToken: string
         refreshToken: string
+        expiresIn?: number
+        tokenType?: string
+        user?: unknown
       }
 
-      const { error: setSessionError } = await supabase.auth.setSession({
-        access_token: loginData.accessToken,
-        refresh_token: loginData.refreshToken,
-      })
+      persistSessionFallback(loginData)
 
-      if (setSessionError) {
+      let setSessionError: { message: string } | null = null
+      try {
+        const setSessionResult = await Promise.race([
+          supabase.auth.setSession({
+            access_token: loginData.accessToken,
+            refresh_token: loginData.refreshToken,
+          }),
+          new Promise<{ error: { message: string } | null }>((resolve) => {
+            setTimeout(() => resolve({ error: { message: 'set_session_timeout' } }), 5000)
+          }),
+        ])
+
+        setSessionError = setSessionResult.error
+      } catch {
+        setSessionError = { message: 'set_session_failed' }
+      }
+
+      if (setSessionError && setSessionError.message !== 'set_session_timeout') {
         setError('登录状态建立失败，请重试')
         setLoading(false)
         return

@@ -29,6 +29,25 @@ const AuthContext = createContext<AuthState>({
   loading: true,
 })
 
+function getStoredUserFromLocalStorage(): User | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const authKey = Object.keys(window.localStorage).find((key) =>
+      key.endsWith('-auth-token')
+    )
+    if (!authKey) return null
+
+    const raw = window.localStorage.getItem(authKey)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as { user?: User }
+    return parsed.user ?? null
+  } catch {
+    return null
+  }
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return await Promise.race([
     promise,
@@ -90,7 +109,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIfActive({ user: null, profile: null, loading: false })
         }
       } catch {
-        setIfActive({ user: null, profile: null, loading: false })
+        // On static hosting/dev HMR, auth lock contention can timeout getSession().
+        // Fall back to persisted storage to avoid false logout redirects.
+        const fallbackUser = getStoredUserFromLocalStorage()
+        if (fallbackUser) {
+          const profile = await loadProfile(fallbackUser.id)
+          setIfActive({ user: fallbackUser, profile, loading: false })
+        } else {
+          setIfActive({ user: null, profile: null, loading: false })
+        }
       }
     }
 
