@@ -88,12 +88,15 @@ export default function SamplesPage() {
           <p className="text-sm text-gray-500 mt-0.5">共 {count} 条样本</p>
         </div>
         {canCreate && (
-          <Link
-            href="/samples/new"
-            className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            + 新建样本
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/samples/new"
+              className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              + 新建样本并录入
+            </Link>
+            <span className="text-xs text-gray-400">或在下方样本行点击“录入记录”</span>
+          </div>
         )}
       </div>
 
@@ -170,12 +173,22 @@ export default function SamplesPage() {
                       {new Date(sample.updated_at).toLocaleDateString('zh-CN')}
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/samples/detail?id=${sample.id}`}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        查看
-                      </Link>
+                      <div className="flex items-center gap-2 justify-end">
+                        <Link
+                          href={`/samples/detail?id=${sample.id}`}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          查看
+                        </Link>
+                        {canCreate && (
+                          <Link
+                            href={`/samples/edit?id=${sample.id}`}
+                            className="text-xs text-emerald-600 hover:text-emerald-700"
+                          >
+                            录入记录
+                          </Link>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )

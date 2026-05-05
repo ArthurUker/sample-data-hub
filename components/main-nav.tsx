@@ -8,12 +8,11 @@ import type { UserRole } from '@/types'
 const navItems: Array<{
   href: string
   label: string
-  roles?: UserRole[]
 }> = [
   { href: '/samples', label: '样本台账' },
   { href: '/review', label: '差异审核' },
-  { href: '/samples/new', label: '手工录入', roles: ['ADMIN', 'OPERATOR'] },
-  { href: '/import', label: 'Excel 导入', roles: ['ADMIN', 'OPERATOR'] },
+  { href: '/samples/new', label: '数据录入' },
+  { href: '/import', label: 'Excel 导入' },
 ]
 
 const roleLabel: Record<UserRole, string> = {
@@ -33,9 +32,6 @@ export default function MainNav({
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  const visibleNavItems = navItems.filter((item) =>
-    !item.roles || item.roles.includes(userRole)
-  )
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -49,7 +45,7 @@ export default function MainNav({
         <div className="flex items-center gap-6">
           <span className="font-semibold text-gray-900 text-sm">样本数据平台</span>
           <nav className="flex gap-1">
-            {visibleNavItems.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
