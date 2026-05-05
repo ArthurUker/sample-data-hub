@@ -22,7 +22,7 @@ export default function LoginPage() {
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
     if (apiBase) {
-      fetch(`${apiBase}/api/health`).catch(() => {})
+      fetch(`${apiBase}/health`).catch(() => {})
     }
   }, [])
 
