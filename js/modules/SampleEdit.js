@@ -27,7 +27,13 @@ export class SampleEditModule {
     const isNew    = !sampleId
 
     const profile = this._auth.getProfile()
-    if (!profile || (profile.role !== 'ADMIN' && profile.role !== 'OPERATOR')) {
+    if (!profile) {
+      // profile 尚未加载，显示 spinner，等待 redispatch 后重新渲染
+      container.innerHTML = `<div class="py-20 text-center text-sm text-gray-400">
+        <div class="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>加载中…</div>`
+      return
+    }
+    if (profile.role !== 'ADMIN' && profile.role !== 'OPERATOR') {
       container.innerHTML = `<div class="max-w-lg bg-white rounded-xl border p-6 text-sm text-gray-500">
         您没有权限进行数据录入。</div>`
       return

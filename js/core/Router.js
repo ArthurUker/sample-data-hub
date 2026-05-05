@@ -49,6 +49,11 @@ export class Router {
   go(hash) {
     location.hash = hash.startsWith('#') ? hash : `#/${hash}`
   }
+
+  /** 重新渲染当前路由（profile 加载后补刷用） */
+  redispatch() {
+    if (this._container) this._dispatch()
+  }
 }
 
 export const router = new Router()

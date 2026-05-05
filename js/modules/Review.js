@@ -11,7 +11,13 @@ export class ReviewModule {
 
   async render(container) {
     const profile = this._auth.getProfile()
-    if (!profile || (profile.role !== 'ADMIN' && profile.role !== 'REVIEWER')) {
+    if (!profile) {
+      // profile 尚未加载，显示 spinner，等待 redispatch 后重新渲染
+      container.innerHTML = `<div class="py-20 text-center text-sm text-gray-400">
+        <div class="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>加载中…</div>`
+      return
+    }
+    if (profile.role !== 'ADMIN' && profile.role !== 'REVIEWER') {
       container.innerHTML = `<div class="py-20 text-center text-sm text-gray-400">您没有查看审核队列的权限</div>`
       return
     }

@@ -83,6 +83,7 @@ async function init() {
   document.getElementById('logout-btn')?.addEventListener('click', () => authService.logout())
 
   // 异步初始化真实 auth 状态（会在 INITIAL_SESSION 回调中更新用户信息）
+  let profileInitDone = false
   authService.init((user, profile) => {
     if (!user) {
       window.location.replace('./login.html')
@@ -92,6 +93,11 @@ async function init() {
     document.getElementById('nav-username').textContent = profile?.name || user.email || ''
     document.getElementById('nav-role').textContent = ROLE_LABEL[profile?.role] ?? ''
     applyRoleVisibility(profile?.role ?? 'VIEWER')
+    // 首次 profile 加载完成后重新渲染当前页（修复权限控件显示）
+    if (!profileInitDone) {
+      profileInitDone = true
+      router.redispatch()
+    }
   })
 }
 
