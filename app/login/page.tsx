@@ -11,6 +11,17 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  async function waitForSessionReady(maxAttempts = 10, intervalMs = 120) {
+    for (let i = 0; i < maxAttempts; i += 1) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (session?.access_token) return true
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+    return false
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
@@ -42,6 +53,13 @@ export default function LoginPage() {
 
       if (setSessionError) {
         setError('登录状态建立失败，请重试')
+        setLoading(false)
+        return
+      }
+
+      const sessionReady = await waitForSessionReady()
+      if (!sessionReady) {
+        setError('登录状态同步超时，请重试')
         setLoading(false)
         return
       }
