@@ -46,8 +46,13 @@ export class Router {
   }
 
   /** 手动导航到某个路由 */
-  go(hash) {
-    location.hash = hash.startsWith('#') ? hash : `#/${hash}`
+  go(path) {
+    // 支持传入 '/sample?id=x'、'sample?id=x'、'#/sample?id=x' 三种格式
+    if (path.startsWith('#')) {
+      location.hash = path
+    } else {
+      location.hash = '#/' + path.replace(/^\/+/, '')
+    }
   }
 
   /** 重新渲染当前路由（profile 加载后补刷用） */

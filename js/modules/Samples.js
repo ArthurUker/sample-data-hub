@@ -32,7 +32,10 @@ export class SamplesModule {
 
     let query = supabase
       .from('samples')
-      .select('id, sample_type, sample_source, status, updated_at, comparison_results(comp_status)', { count: 'exact' })
+      .select(`id, sample_type, sample_source, status, updated_at,
+        comparison_results(comp_status),
+        detection_records(id, operator_id, created_at,
+          profiles!detection_records_operator_id_fkey(name))`, { count: 'exact' })
       .order('updated_at', { ascending: false })
       .range(from, to)
 
@@ -103,7 +106,8 @@ export class SamplesModule {
             <tr>
               <th class="text-left px-5 py-3 font-medium text-gray-600">样本编号</th>
               <th class="text-left px-5 py-3 font-medium text-gray-600">类型</th>
-              <th class="text-left px-5 py-3 font-medium text-gray-600">来源</th>
+              <th class="text-left px-5 py-3 font-medium text-gray-600">检测站点数</th>
+              <th class="text-left px-5 py-3 font-medium text-gray-600">录入人</th>
               <th class="text-left px-5 py-3 font-medium text-gray-600">状态</th>
               <th class="text-left px-5 py-3 font-medium text-gray-600">更新时间</th>
               <th class="text-left px-5 py-3 font-medium text-gray-600">操作</th>
@@ -112,6 +116,11 @@ export class SamplesModule {
           <tbody class="divide-y divide-gray-100">
             ${rows.map((s) => {
               const hasDivergent = s.comparison_results?.some((r) => r.comp_status === 'DIVERGENT')
+              const records      = s.detection_records ?? []
+              const recordCount  = records.length
+              // 最近录入人（按 created_at 最新的记录取）
+              const latestRecord = records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+              const operatorName = latestRecord?.profiles?.name ?? '—'
               return `<tr class="cursor-pointer hover:bg-gray-50 transition-colors" data-sample-id="${this._esc(s.id)}">
                 <td class="px-5 py-3">
                   <div class="flex items-center gap-2">
@@ -120,7 +129,12 @@ export class SamplesModule {
                   </div>
                 </td>
                 <td class="px-5 py-3 text-gray-700">${this._esc(s.sample_type)}</td>
-                <td class="px-5 py-3 text-gray-500">${this._esc(s.sample_source ?? '-')}</td>
+                <td class="px-5 py-3 text-gray-500">
+                  ${recordCount > 0
+                    ? `<span class="font-medium text-gray-800">${recordCount}</span><span class="text-gray-400 ml-1">个站点</span>`
+                    : '<span class="text-gray-300">未录入</span>'}
+                </td>
+                <td class="px-5 py-3 text-gray-500 text-xs">${this._esc(operatorName)}</td>
                 <td class="px-5 py-3">
                   <span class="text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[s.status] ?? 'bg-gray-100 text-gray-600'}">
                     ${STATUS_LABEL[s.status] ?? s.status}
