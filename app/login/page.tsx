@@ -1,15 +1,30 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   // 保持单一 client 实例，避免重渲染时重复创建实例导致 auth lock 竞争
   const supabase = useMemo(() => createClient(), [])
+  const router = useRouter()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // 页面打开时即开始预取 samples 路由的 JS 包，登录完成后无需等待资源下载
+  useEffect(() => {
+    router.prefetch('/samples/')
+  }, [router])
+
+  // 提前预热 Railway 后端连接，降低登录请求的冷启动延迟
+  useEffect(() => {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
+    if (apiBase) {
+      fetch(`${apiBase}/api/health`).catch(() => {})
+    }
+  }, [])
 
   function persistSessionFallback(data: {
     accessToken: string
@@ -82,6 +97,7 @@ export default function LoginPage() {
       persistSessionFallback(loginData)
 
       let setSessionError: { message: string } | null = null
+      let sessionFromSetSession = false
       try {
         const setSessionResult = await Promise.race([
           supabase.auth.setSession({
@@ -94,6 +110,8 @@ export default function LoginPage() {
         ])
 
         setSessionError = setSessionResult.error
+        // setSession 成功时直接携带 session 对象，可以跳过后续轮询
+        sessionFromSetSession = !setSessionError && !!((setSessionResult as { data?: { session?: unknown } }).data?.session)
       } catch {
         setSessionError = { message: 'set_session_failed' }
       }
@@ -104,11 +122,14 @@ export default function LoginPage() {
         return
       }
 
-      const sessionReady = await waitForSessionReady()
-      if (!sessionReady) {
-        setError('登录状态同步超时，请重试')
-        setLoading(false)
-        return
+      // setSession 已确认返回 session，无需轮询，直接跳转
+      if (!sessionFromSetSession) {
+        const sessionReady = await waitForSessionReady()
+        if (!sessionReady) {
+          setError('登录状态同步超时，请重试')
+          setLoading(false)
+          return
+        }
       }
 
       // 用 location.href 强制完整刷新，避免 AuthProvider 状态更新前 MainLayout 就检查 user 导致竞态

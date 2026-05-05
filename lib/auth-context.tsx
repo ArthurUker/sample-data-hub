@@ -29,22 +29,25 @@ const AuthContext = createContext<AuthState>({
   loading: true,
 })
 
-function getStoredUserFromLocalStorage(): User | null {
-  if (typeof window === 'undefined') return null
+function getStoredSessionFromLocalStorage(): { user: User | null; refreshToken: string | null } {
+  if (typeof window === 'undefined') return { user: null, refreshToken: null }
 
   try {
     const authKey = Object.keys(window.localStorage).find((key) =>
       key.endsWith('-auth-token')
     )
-    if (!authKey) return null
+    if (!authKey) return { user: null, refreshToken: null }
 
     const raw = window.localStorage.getItem(authKey)
-    if (!raw) return null
+    if (!raw) return { user: null, refreshToken: null }
 
-    const parsed = JSON.parse(raw) as { user?: User }
-    return parsed.user ?? null
+    const parsed = JSON.parse(raw) as { user?: User; refresh_token?: string }
+    return {
+      user: parsed.user ?? null,
+      refreshToken: parsed.refresh_token ?? null,
+    }
   } catch {
-    return null
+    return { user: null, refreshToken: null }
   }
 }
 
@@ -111,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // On static hosting/dev HMR, auth lock contention can timeout getSession().
         // Fall back to persisted storage to avoid false logout redirects.
-        const fallbackUser = getStoredUserFromLocalStorage()
+        const { user: fallbackUser } = getStoredSessionFromLocalStorage()
         if (fallbackUser) {
           const profile = await loadProfile(fallbackUser.id)
           setIfActive({ user: fallbackUser, profile, loading: false })
@@ -128,6 +131,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event: string, session: Session | null) => {
       if (event === 'INITIAL_SESSION') return
+
+      if (event === 'SIGNED_OUT') {
+        // 在静态部署（GitHub Pages）上，tab 切到后台后 access_token 可能已过期，
+        // auto-refresh 可能因浏览器节流而失败，导致误触发 SIGNED_OUT。
+        // 先尝试用 localStorage 里的 refresh_token 主动续期，恢复失败再真正登出。
+        const { refreshToken } = getStoredSessionFromLocalStorage()
+        if (refreshToken) {
+          try {
+            const { data: refreshData } = await supabase.auth.refreshSession({
+              refresh_token: refreshToken,
+            })
+            if (refreshData.session && active) {
+              const profile = await loadProfile(refreshData.session.user.id)
+              setIfActive({ user: refreshData.session.user, profile, loading: false })
+              return
+            }
+          } catch {
+            // 续期失败，继续执行登出逻辑
+          }
+        }
+        setIfActive({ user: null, profile: null, loading: false })
+        return
+      }
+
       const user = session?.user ?? null
       if (user) {
         const profile = await loadProfile(user.id)
@@ -137,9 +164,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })
 
+    // 当用户切回 tab（visibilitychange）时主动检查并续期，防止后台休眠导致的登出
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible' || !active) return
+      try {
+        const {
+          data: { session: currentSession },
+        } = await supabase.auth.getSession()
+        if (!currentSession) {
+          // Access token 已失效，尝试用 refresh_token 续期
+          const { data: refreshData } = await supabase.auth.refreshSession()
+          if (refreshData.session && active) {
+            const profile = await loadProfile(refreshData.session.user.id)
+            setIfActive({ user: refreshData.session.user, profile, loading: false })
+          }
+        }
+      } catch {
+        // 网络错误时不修改登录状态，等下次重试
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       active = false
       subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [loadProfile])
 
