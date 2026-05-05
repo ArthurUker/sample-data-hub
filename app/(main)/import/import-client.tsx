@@ -126,7 +126,7 @@ export default function ImportClient() {
             ct_value: typeof row.ct_value === 'number' ? row.ct_value : null,
             raw_text: typeof row.raw_text === 'string' ? row.raw_text : null,
             conclusion: typeof row.conclusion === 'string' ? row.conclusion : null,
-            is_missing: row.ct_value === undefined || row.ct_value === '',
+            is_missing: row.is_missing ?? row.ct_value === undefined,
           }))
 
           const { error: itemsError } = await supabase
@@ -229,7 +229,7 @@ export default function ImportClient() {
             </span>
           </label>
           <p className="text-xs text-gray-400 mt-3">
-            文件需包含表头：样本编号、样本类型、站点名称、检测项目、Ct值
+            支持模板表头或客户表头（如：检测编号、检测类别、检测站点、检测结果/CT值）
           </p>
         </div>
       )}
@@ -285,7 +285,9 @@ export default function ImportClient() {
                     <td className="px-3 py-2">{row.sample_type}</td>
                     <td className="px-3 py-2">{row.site_name}</td>
                     <td className="px-3 py-2 font-medium">{row.project_name}</td>
-                    <td className="px-3 py-2 font-mono">{String(row.ct_value ?? '')}</td>
+                    <td className="px-3 py-2 font-mono">
+                      {row.is_missing ? (row.raw_text ?? '未测') : String(row.ct_value ?? '')}
+                    </td>
                     <td className="px-3 py-2">{row.conclusion ?? ''}</td>
                     <td className="px-3 py-2 text-gray-400">{row.remark ?? ''}</td>
                   </tr>

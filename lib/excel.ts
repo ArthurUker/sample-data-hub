@@ -13,6 +13,72 @@ export const IMPORT_COLUMNS = [
   '备注',
 ]
 
+const COLUMN_ALIASES = {
+  sample_id: ['样本编号', '检测编号', '样品编号', '样本id', '检测id'],
+  sample_type: ['样本类型', '检测类别', '样品类型'],
+  site_name: ['站点名称', '检测站点', '检测点位', '检测站点/点位'],
+  project_name: ['检测项目', '项目名称', '项目'],
+  ct_value: ['Ct值', 'CT值', '检测结果/CT值', '检测结果', '结果/CT值'],
+  raw_text: ['原始文本', '原始结果'],
+  conclusion: ['结论', '判定'],
+  remark: ['备注', '说明', '检测时间'],
+} as const
+
+type ColumnKey = keyof typeof COLUMN_ALIASES
+
+function normalizeHeader(input: string): string {
+  return input.replace(/\s+/g, '').toLowerCase()
+}
+
+function getCellByAliases(row: Record<string, unknown>, key: ColumnKey): unknown {
+  const aliases = COLUMN_ALIASES[key]
+  const normalizedMap = new Map<string, unknown>()
+
+  Object.entries(row).forEach(([k, v]) => {
+    normalizedMap.set(normalizeHeader(k), v)
+  })
+
+  for (const alias of aliases) {
+    const found = normalizedMap.get(normalizeHeader(alias))
+    if (found !== undefined) return found
+  }
+
+  return ''
+}
+
+function isCtMissingText(v: string): boolean {
+  const normalized = v.trim().toLowerCase()
+  return ['未测', '未检', 'n/a', 'na', 'null', '-', '—', '/'].includes(normalized)
+}
+
+function parseCtValue(rawCt: string): {
+  ctValue?: number
+  isMissing: boolean
+  rawTextFromCt?: string
+  warning?: string
+} {
+  const input = rawCt.trim()
+  if (!input) return { isMissing: true }
+  if (isCtMissingText(input)) return { isMissing: true, rawTextFromCt: input }
+
+  const matches = input.match(/-?\d+(?:\.\d+)?/g) ?? []
+  if (matches.length === 0) {
+    // 无法提取数值时按缺失处理，但保留原文以便手工核对
+    return { isMissing: true, rawTextFromCt: input }
+  }
+
+  if (matches.length > 1) {
+    return {
+      ctValue: Number(matches[0]),
+      isMissing: false,
+      rawTextFromCt: input,
+      warning: `检测结果 "${input}" 含多个 Ct 值，已按首个值 ${matches[0]} 导入并保留原文`,
+    }
+  }
+
+  return { ctValue: Number(matches[0]), isMissing: false }
+}
+
 /**
  * 将 Excel 文件（ArrayBuffer）解析为行数据
  */
@@ -31,14 +97,31 @@ export function parseExcelFile(buffer: ArrayBuffer): {
 
   const errors: string[] = []
   const rows: ExcelImportRow[] = []
+  const carry = {
+    sample_id: '',
+    sample_type: '',
+    site_name: '',
+    remark: '',
+  }
 
   raw.forEach((row, idx) => {
     const lineNo = idx + 2 // Excel 行号（含表头）
 
-    const sampleId = String(row['样本编号'] ?? '').trim()
-    const sampleType = String(row['样本类型'] ?? '').trim()
-    const siteName = String(row['站点名称'] ?? '').trim()
-    const projectName = String(row['检测项目'] ?? '').trim()
+    const sampleIdRaw = String(getCellByAliases(row, 'sample_id') ?? '').trim()
+    const sampleTypeRaw = String(getCellByAliases(row, 'sample_type') ?? '').trim()
+    const siteNameRaw = String(getCellByAliases(row, 'site_name') ?? '').trim()
+    const projectName = String(getCellByAliases(row, 'project_name') ?? '').trim()
+    const remarkRaw = String(getCellByAliases(row, 'remark') ?? '').trim()
+
+    const sampleId = sampleIdRaw || carry.sample_id
+    const sampleType = sampleTypeRaw || carry.sample_type
+    const siteName = siteNameRaw || carry.site_name
+    const remark = remarkRaw || carry.remark
+
+    if (sampleIdRaw) carry.sample_id = sampleIdRaw
+    if (sampleTypeRaw) carry.sample_type = sampleTypeRaw
+    if (siteNameRaw) carry.site_name = siteNameRaw
+    if (remarkRaw) carry.remark = remarkRaw
 
     if (!sampleId) {
       errors.push(`第 ${lineNo} 行：样本编号不能为空`)
@@ -57,18 +140,25 @@ export function parseExcelFile(buffer: ArrayBuffer): {
       return
     }
 
-    const ctRaw = String(row['Ct值'] ?? '').trim()
-    const ctValue = ctRaw !== '' ? parseFloat(ctRaw) : undefined
+    const ctRaw = String(getCellByAliases(row, 'ct_value') ?? '').trim()
+    const normalizedCt = parseCtValue(ctRaw)
+    if (normalizedCt.warning) {
+      errors.push(`第 ${lineNo} 行：${normalizedCt.warning}`)
+    }
+
+    const rawTextInput = String(getCellByAliases(row, 'raw_text') ?? '').trim()
+    const rawText = rawTextInput || normalizedCt.rawTextFromCt || undefined
 
     rows.push({
       sample_id: sampleId,
       sample_type: sampleType,
       site_name: siteName,
       project_name: projectName,
-      ct_value: isNaN(ctValue as number) ? ctRaw : ctValue,
-      raw_text: String(row['原始文本'] ?? '').trim() || undefined,
-      conclusion: String(row['结论'] ?? '').trim() || undefined,
-      remark: String(row['备注'] ?? '').trim() || undefined,
+      ct_value: normalizedCt.ctValue,
+      is_missing: normalizedCt.isMissing,
+      raw_text: rawText,
+      conclusion: String(getCellByAliases(row, 'conclusion') ?? '').trim() || undefined,
+      remark: remark || undefined,
     })
   })
 

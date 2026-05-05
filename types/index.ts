@@ -52,7 +52,8 @@ export type ExcelImportRow = {
   sample_type: string
   site_name: string
   project_name: string
-  ct_value?: number | string
+  ct_value?: number
+  is_missing?: boolean
   raw_text?: string
   conclusion?: string
   remark?: string
