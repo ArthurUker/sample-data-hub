@@ -2,7 +2,7 @@
  * app.js - 应用入口
  * 负责：认证守卫、导航栏初始化、路由注册
  */
-import { authService, readStoredUser } from './services/AuthService.js'
+import { authService, readStoredUser, readStoredProfile } from './services/AuthService.js'
 import { router } from './core/Router.js'
 import { SamplesModule }     from './modules/Samples.js'
 import { SampleDetailModule } from './modules/SampleDetail.js'
@@ -59,6 +59,13 @@ async function init() {
   document.getElementById('loading-screen').classList.add('hidden')
   document.getElementById('main-layout').classList.remove('hidden')
   document.getElementById('nav-username').textContent = storedUser.email ?? ''
+
+  // 立即用缓存的 profile 恢复导航可见性，无需等待 DB 查询
+  const cachedProfile = readStoredProfile()
+  if (cachedProfile) {
+    document.getElementById('nav-role').textContent = ROLE_LABEL[cachedProfile.role] ?? ''
+    applyRoleVisibility(cachedProfile.role)
+  }
 
   // 注册路由模块
   const samplesModule = new SamplesModule(authService)

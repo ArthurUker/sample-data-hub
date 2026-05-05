@@ -38,6 +38,13 @@ export function readStoredUser() {
   } catch { return null }
 }
 
+const PROFILE_CACHE_KEY = 'sdh_profile'
+
+/** 同步读取缓存的 profile（含角色） */
+export function readStoredProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_CACHE_KEY)) ?? null } catch { return null }
+}
+
 export class AuthService {
   constructor() {
     this._user = null
@@ -80,6 +87,7 @@ export class AuthService {
         getSupabase().from('profiles').select('id, name, role').eq('id', userId).single(),
         new Promise((resolve) => setTimeout(() => resolve({ data: null }), 6000)),
       ])
+      if (data) localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data))
       return data ?? null
     } catch { return null }
   }

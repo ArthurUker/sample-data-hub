@@ -129,6 +129,7 @@ export class ImportModule {
     this._auth = authService
     this._rows = []
     this._parseErrors = []
+    this._sites = []          // 从 DB 加载的已知站点
   }
 
   render(container) {
@@ -203,10 +204,15 @@ export class ImportModule {
       正在解析文件…</div>`
 
     try {
-      const buffer = await file.arrayBuffer()
+      const supabase = getSupabase()
+      const [buffer, sitesResult] = await Promise.all([
+        file.arrayBuffer(),
+        supabase.from('sites').select('id, name').order('name'),
+      ])
       const { rows, errors } = parseExcel(buffer)
       this._rows = rows
       this._parseErrors = errors
+      this._sites = sitesResult.data ?? []
       this._renderPreview(container, file.name)
     } catch (e) {
       container.innerHTML = `<div class="max-w-3xl">
@@ -230,6 +236,37 @@ export class ImportModule {
       bySample.get(r.sample_id).push(r)
     })
 
+    // 站点名称检查
+    const siteNameSet     = new Set(this._sites.map((s) => s.name))
+    const uniqueSiteNames = [...new Set(rows.map((r) => r.site_name).filter(Boolean))].sort()
+    const unknownSites    = uniqueSiteNames.filter((n) => !siteNameSet.has(n))
+
+    const siteMappingHtml = uniqueSiteNames.length > 0 ? `
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-medium text-gray-900 text-sm">站点名称检查</h2>
+        ${unknownSites.length > 0
+          ? `<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">${unknownSites.length} 个站点不在数据库中，导入时将自动创建</span>`
+          : `<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">全部已匹配</span>`}
+      </div>
+      <div class="space-y-2">
+        ${uniqueSiteNames.map((name) => {
+          const known    = siteNameSet.has(name)
+          const rowCount = rows.filter((r) => r.site_name === name).length
+          const ic       = 'border border-amber-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-56 bg-white'
+          return `<div class="flex items-center gap-3">
+            <span class="text-xs w-4 text-center ${known ? 'text-green-600' : 'text-amber-500'}">${known ? '✓' : '⚠'}</span>
+            <span class="text-sm text-gray-800 w-48 truncate font-mono" title="${this._esc(name)}">${this._esc(name)}</span>
+            <span class="text-xs text-gray-400">${rowCount} 行</span>
+            ${known
+              ? `<span class="text-xs text-green-600">已匹配</span>`
+              : `<span class="text-xs text-amber-600 shrink-0">或修正为：</span>
+                 <input class="site-map-input ${ic}" data-original="${this._esc(name)}" value="${this._esc(name)}" placeholder="站点名称">`}
+          </div>`
+        }).join('')}
+      </div>
+    </div>` : ''
+
     container.innerHTML = `<div class="max-w-4xl fade-in space-y-5">
       <div class="flex items-center justify-between">
         <div>
@@ -247,6 +284,8 @@ export class ImportModule {
         </ul>
       </div>` : ''}
 
+      ${siteMappingHtml}
+
       <!-- 预览表 -->
       <div class="bg-white rounded-xl border border-gray-200 overflow-auto max-h-96">
         ${rows.length === 0 ? '<div class="p-8 text-center text-sm text-gray-400">未识别到有效数据行</div>' : `
@@ -259,19 +298,22 @@ export class ImportModule {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            ${rows.slice(0, 50).map((r) => `<tr class="hover:bg-gray-50">
-              <td class="px-3 py-2 font-mono text-gray-900">${this._esc(r.sample_id)}</td>
-              <td class="px-3 py-2 text-gray-700">${this._esc(r.sample_type)}</td>
-              <td class="px-3 py-2 text-gray-700">${this._esc(r.site_name)}</td>
-              <td class="px-3 py-2 text-gray-900">${this._esc(r.project_name)}</td>
-              <td class="px-3 py-2 font-mono">${r.ct_value ?? '-'}</td>
-              <td class="px-3 py-2">${r.is_missing ? '✓' : ''}</td>
-              <td class="px-3 py-2 text-gray-500">${this._esc(r.raw_text ?? '')}</td>
-              <td class="px-3 py-2 text-gray-500">${this._esc(r.conclusion ?? '')}</td>
-            </tr>`).join('')}
+            ${rows.slice(0, 100).map((r) => {
+              const knownSite = siteNameSet.has(r.site_name)
+              return `<tr class="hover:bg-gray-50/50 ${!knownSite ? 'bg-amber-50/30' : ''}">
+                <td class="px-3 py-2 font-mono text-gray-900">${this._esc(r.sample_id)}</td>
+                <td class="px-3 py-2 text-gray-700">${this._esc(r.sample_type)}</td>
+                <td class="px-3 py-2 ${!knownSite ? 'text-amber-700 font-medium' : 'text-gray-700'}">${this._esc(r.site_name)}</td>
+                <td class="px-3 py-2 text-gray-900">${this._esc(r.project_name)}</td>
+                <td class="px-3 py-2 font-mono">${r.ct_value ?? '-'}</td>
+                <td class="px-3 py-2">${r.is_missing ? '✓' : ''}</td>
+                <td class="px-3 py-2 text-gray-500">${this._esc(r.raw_text ?? '')}</td>
+                <td class="px-3 py-2 text-gray-500">${this._esc(r.conclusion ?? '')}</td>
+              </tr>`
+            }).join('')}
           </tbody>
         </table>
-        ${rows.length > 50 ? `<div class="p-3 text-xs text-gray-400 text-center">仅显示前 50 行，共 ${rows.length} 行</div>` : ''}`}
+        ${rows.length > 100 ? `<div class="p-3 text-xs text-gray-400 text-center">仅显示前 100 行，共 ${rows.length} 行</div>` : ''}`}
       </div>
 
       <div id="import-error" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 space-y-1"></div>
@@ -280,7 +322,7 @@ export class ImportModule {
       <div class="flex gap-3">
         ${rows.length > 0 ? `
         <button id="btn-import" class="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
-          开始导入 (${bySample.size} 个样本)
+          确认导入 (${bySample.size} 个样本)
         </button>` : ''}
         <button id="btn-reset" class="text-sm border border-gray-300 rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-50">取消</button>
       </div>
@@ -308,12 +350,29 @@ export class ImportModule {
     const user     = this._auth.getUser()
     if (!user) { showToast('请先登录', 'error'); return }
 
+    // 收集站点名称映射（用户可能在预览中修改了站点名称）
+    const siteMappings = {}
+    container.querySelectorAll('.site-map-input').forEach((input) => {
+      const original = input.dataset.original
+      const renamed  = input.value.trim()
+      if (original && renamed) siteMappings[original] = renamed
+    })
+
+    // 应用映射到行数据
+    const mappedRows = this._rows.map((r) => ({
+      ...r,
+      site_name: siteMappings[r.site_name] ?? r.site_name,
+    }))
+
     // 按样本分组
     const bySample = new Map()
-    this._rows.forEach((r) => {
+    mappedRows.forEach((r) => {
       if (!bySample.has(r.sample_id)) bySample.set(r.sample_id, [])
       bySample.get(r.sample_id).push(r)
     })
+
+    // 站点 ID 缓存（避免重复查询）
+    const siteIdCache = new Map()
 
     const importErrors = []
     let imported = 0
@@ -343,14 +402,29 @@ export class ImportModule {
         })
 
         for (const [siteName, siteRows] of bySite) {
-          // 查找站点 ID
-          const { data: site } = await supabase.from('sites').select('id').eq('name', siteName).maybeSingle()
-          if (!site) { importErrors.push(`站点"${siteName}"不存在，已跳过`); continue }
+          // 查找站点 ID，缓存结果
+          let siteId = siteIdCache.get(siteName)
+          if (!siteId) {
+            const { data: site } = await supabase.from('sites').select('id').eq('name', siteName).maybeSingle()
+            if (site) {
+              siteId = site.id
+            } else {
+              // 站点不存在 → 自动创建
+              const { data: newSite, error: siteErr } = await supabase
+                .from('sites').insert({ name: siteName }).select('id').single()
+              if (siteErr || !newSite) {
+                importErrors.push(`站点"${siteName}"创建失败：${siteErr?.message ?? '未知错误'}，相关行已跳过`)
+                continue
+              }
+              siteId = newSite.id
+            }
+            siteIdCache.set(siteName, siteId)
+          }
 
           // 创建检测记录
           const { data: record, error: recErr } = await supabase
             .from('detection_records')
-            .insert({ sample_id: sampleId, site_id: site.id, source_type: 'IMPORT',
+            .insert({ sample_id: sampleId, site_id: siteId, source_type: 'IMPORT',
               operator_id: user.id, remark: siteRows[0].remark ?? null })
             .select('id').single()
           if (recErr || !record) { importErrors.push(`${sampleId} 站点 ${siteName} 检测记录创建失败`); continue }
