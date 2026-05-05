@@ -34,6 +34,8 @@ export default function MainNav({
   const supabase = createClient()
 
   async function handleLogout() {
+    // 主动退出时清除独立备份的 refresh_token，防止下次误恢复
+    try { window.localStorage.removeItem('app-rt-bk') } catch { /* ignore */ }
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
