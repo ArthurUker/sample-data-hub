@@ -16,7 +16,7 @@ export const IMPORT_COLUMNS = [
 const COLUMN_ALIASES = {
   sample_id: ['样本编号', '检测编号', '样品编号', '样本id', '检测id'],
   sample_type: ['样本类型', '检测类别', '样品类型'],
-  site_name: ['站点名称', '检测站点', '检测点位', '检测站点/点位'],
+  site_name: ['站点名称', '检测站点', '检测点位', '检测站点/点位', '检测方式'],
   project_name: ['检测项目', '项目名称', '项目'],
   ct_value: ['Ct值', 'CT值', '检测结果/CT值', '检测结果', '结果/CT值'],
   raw_text: ['原始文本', '原始结果'],
