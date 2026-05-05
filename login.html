@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 · 样本数据平台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./css/style.css">
+  <!-- Supabase UMD（在 ESM 模块之前加载，保证 window.supabase 可用） -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.1/dist/umd/supabase.js"></script>
+  <!-- 预连接，减少 DNS 延迟 -->
+  <link rel="preconnect" href="https://aitzxizdxgvnicrobqit.supabase.co">
+</head>
+<body class="min-h-screen bg-gray-50 flex items-center justify-center">
+
+  <div class="w-full max-w-sm">
+    <!-- Logo / 标题 -->
+    <div class="text-center mb-8">
+      <h1 class="text-2xl font-semibold text-gray-900">样本数据平台</h1>
+      <p class="text-sm text-gray-500 mt-1">请登录以继续</p>
+    </div>
+
+    <!-- 登录卡片 -->
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+      <form id="login-form" class="space-y-4" novalidate>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="email">邮箱</label>
+          <input
+            id="email"
+            type="email"
+            autocomplete="username"
+            required
+            placeholder="you@example.com"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          >
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="password">密码</label>
+          <input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            placeholder="••••••••"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          >
+        </div>
+
+        <!-- 错误提示 -->
+        <div id="error-msg" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+
+        <button
+          type="submit"
+          id="submit-btn"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          登录
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SCHEMA } from './js/config.js'
+
+    // 如果已经登录，直接跳转
+    const { createClient } = window.supabase
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      db: { schema: SUPABASE_SCHEMA || 'sample_data_hub' },
+      auth: { persistSession: true, storage: window.localStorage, detectSessionInUrl: false },
+    })
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) window.location.replace('./app.html')
+    })
+
+    // 预热 Railway 后端（首次冷启动较慢）
+    import('./js/config.js').then(({ API_BASE_URL }) => {
+      if (API_BASE_URL && !API_BASE_URL.startsWith('PLACEHOLDER')) {
+        fetch(`${API_BASE_URL}/health`).catch(() => {})
+      }
+    })
+
+    const form    = document.getElementById('login-form')
+    const btn     = document.getElementById('submit-btn')
+    const errorEl = document.getElementById('error-msg')
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const email    = document.getElementById('email').value.trim()
+      const password = document.getElementById('password').value
+
+      if (!email || !password) {
+        showError('请填写邮箱和密码')
+        return
+      }
+
+      btn.disabled = true
+      btn.textContent = '登录中...'
+      errorEl.classList.add('hidden')
+
+      try {
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) throw error
+        window.location.replace('./app.html')
+      } catch (err) {
+        showError(err.message || '登录失败，请检查邮箱和密码')
+        btn.disabled = false
+        btn.textContent = '登录'
+      }
+    })
+
+    function showError(msg) {
+      errorEl.textContent = msg
+      errorEl.classList.remove('hidden')
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+// 环境变量配置
+// 本地开发：直接填写下面的值
+// GitHub Actions CI：通过 sed 替换 PLACEHOLDER_* 占位符
+export const SUPABASE_URL = 'PLACEHOLDER_SUPABASE_URL'
+export const SUPABASE_ANON_KEY = 'PLACEHOLDER_SUPABASE_ANON_KEY'
+export const SUPABASE_SCHEMA = 'PLACEHOLDER_SUPABASE_SCHEMA'
+export const API_BASE_URL = 'PLACEHOLDER_API_BASE_URL'
