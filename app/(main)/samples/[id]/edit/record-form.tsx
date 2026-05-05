@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { triggerCompare } from '@/lib/api-client'
@@ -40,6 +40,68 @@ export default function RecordForm({
   const [items, setItems] = useState<DetectionItemInput[]>([defaultItem()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftRestored, setDraftRestored] = useState(false)
+  const draftKey = useMemo(
+    () => `sample-data-hub:draft:record:${sampleId}:${operatorId || 'anonymous'}`,
+    [sampleId, operatorId]
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = window.localStorage.getItem(draftKey)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as {
+        siteId?: string
+        remark?: string
+        items?: DetectionItemInput[]
+      }
+
+      if (parsed.siteId) setSiteId(parsed.siteId)
+      if (typeof parsed.remark === 'string') setRemark(parsed.remark)
+      if (Array.isArray(parsed.items) && parsed.items.length > 0) setItems(parsed.items)
+      setDraftRestored(true)
+    } catch {
+      // Ignore broken draft payload.
+    }
+  }, [draftKey])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hasAnyValue =
+      Boolean(siteId) ||
+      remark.trim() !== '' ||
+      items.some(
+        (item) =>
+          item.project_name.trim() ||
+          item.ct_value.trim() ||
+          item.raw_text.trim() ||
+          item.conclusion.trim() ||
+          item.is_missing
+      )
+
+    if (!hasAnyValue) return
+
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          siteId,
+          remark,
+          items,
+          updatedAt: Date.now(),
+        })
+      )
+    }, 500)
+
+    return () => window.clearTimeout(timer)
+  }, [siteId, remark, items, draftKey])
+
+  function clearDraft() {
+    if (typeof window === 'undefined') return
+    window.localStorage.removeItem(draftKey)
+    setDraftRestored(false)
+  }
 
   function updateItem(index: number, field: keyof DetectionItemInput, value: string | boolean) {
     setItems((prev) =>
@@ -166,6 +228,7 @@ export default function RecordForm({
     // 7. 触发比对计算（调用 Railway 后端）
     await triggerCompare(sampleId)
 
+    clearDraft()
     router.push(`/samples/detail?id=${sampleId}`)
     router.refresh()
   }
@@ -175,6 +238,15 @@ export default function RecordForm({
       onSubmit={handleSubmit}
       className="bg-white rounded-xl border border-gray-200 p-6 space-y-6"
     >
+      {draftRestored && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-center justify-between">
+          <span>已恢复上次未提交的检测记录草稿。</span>
+          <button type="button" onClick={clearDraft} className="underline">
+            清空草稿
+          </button>
+        </div>
+      )}
+
       {/* 站点选择 */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -26,8 +26,50 @@ const COLUMN_ALIASES = {
 
 type ColumnKey = keyof typeof COLUMN_ALIASES
 
+export type ParseExcelMeta = {
+  recognizedColumns: Partial<Record<ColumnKey, string>>
+  mergeFillCount: number
+  dataRowCount: number
+}
+
 function normalizeHeader(input: string): string {
   return input.replace(/\s+/g, '').toLowerCase()
+}
+
+function findHeaderMatch(
+  headers: string[],
+  key: ColumnKey
+): string | undefined {
+  const normalizedHeaders = new Map<string, string>()
+  headers.forEach((h) => normalizedHeaders.set(normalizeHeader(h), h))
+  for (const alias of COLUMN_ALIASES[key]) {
+    const hit = normalizedHeaders.get(normalizeHeader(alias))
+    if (hit) return hit
+  }
+  return undefined
+}
+
+function applyMergeFill(sheet: XLSX.WorkSheet, matrix: unknown[][]): number {
+  const merges = sheet['!merges'] ?? []
+  let fillCount = 0
+
+  merges.forEach((merge) => {
+    const top = matrix[merge.s.r]?.[merge.s.c]
+    if (top === undefined || top === null || String(top).trim() === '') return
+
+    for (let r = merge.s.r; r <= merge.e.r; r += 1) {
+      if (!matrix[r]) matrix[r] = []
+      for (let c = merge.s.c; c <= merge.e.c; c += 1) {
+        const current = matrix[r][c]
+        if (current === undefined || current === null || String(current).trim() === '') {
+          matrix[r][c] = top
+          fillCount += 1
+        }
+      }
+    }
+  })
+
+  return fillCount
 }
 
 function getCellByAliases(row: Record<string, unknown>, key: ColumnKey): unknown {
@@ -85,14 +127,41 @@ function parseCtValue(rawCt: string): {
 export function parseExcelFile(buffer: ArrayBuffer): {
   rows: ExcelImportRow[]
   errors: string[]
+  meta: ParseExcelMeta
 } {
   const workbook = XLSX.read(buffer, { type: 'array' })
   const sheetName = workbook.SheetNames[0]
   const sheet = workbook.Sheets[sheetName]
 
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
     defval: '',
     raw: false,
+  }) as unknown[][]
+
+  const mergeFillCount = applyMergeFill(sheet, matrix)
+
+  const headerRow = (matrix[0] ?? []).map((cell) => String(cell ?? '').trim())
+  const dataRows = matrix.slice(1)
+
+  const recognizedColumns: Partial<Record<ColumnKey, string>> = {
+    sample_id: findHeaderMatch(headerRow, 'sample_id'),
+    sample_type: findHeaderMatch(headerRow, 'sample_type'),
+    site_name: findHeaderMatch(headerRow, 'site_name'),
+    project_name: findHeaderMatch(headerRow, 'project_name'),
+    ct_value: findHeaderMatch(headerRow, 'ct_value'),
+    raw_text: findHeaderMatch(headerRow, 'raw_text'),
+    conclusion: findHeaderMatch(headerRow, 'conclusion'),
+    remark: findHeaderMatch(headerRow, 'remark'),
+  }
+
+  const raw = dataRows.map((cells) => {
+    const rowObj: Record<string, unknown> = {}
+    headerRow.forEach((header, index) => {
+      if (!header) return
+      rowObj[header] = cells[index] ?? ''
+    })
+    return rowObj
   })
 
   const errors: string[] = []
@@ -162,7 +231,15 @@ export function parseExcelFile(buffer: ArrayBuffer): {
     })
   })
 
-  return { rows, errors }
+  return {
+    rows,
+    errors,
+    meta: {
+      recognizedColumns,
+      mergeFillCount,
+      dataRowCount: raw.length,
+    },
+  }
 }
 
 /**

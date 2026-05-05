@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { parseExcelFile } from '@/lib/excel'
+import { parseExcelFile, type ParseExcelMeta } from '@/lib/excel'
 import { triggerCompare } from '@/lib/api-client'
 import type { ExcelImportRow } from '@/types'
 
@@ -14,6 +14,7 @@ export default function ImportClient() {
 
   const [status, setStatus] = useState<ImportStatus>('idle')
   const [rows, setRows] = useState<ExcelImportRow[]>([])
+  const [parseMeta, setParseMeta] = useState<ParseExcelMeta | null>(null)
   const [parseErrors, setParseErrors] = useState<string[]>([])
   const [importErrors, setImportErrors] = useState<string[]>([])
   const [importedCount, setImportedCount] = useState(0)
@@ -25,12 +26,14 @@ export default function ImportClient() {
     setStatus('parsing')
     setParseErrors([])
     setRows([])
+    setParseMeta(null)
 
     const buffer = await file.arrayBuffer()
-    const { rows: parsed, errors } = parseExcelFile(buffer)
+    const { rows: parsed, errors, meta } = parseExcelFile(buffer)
 
     setParseErrors(errors)
     setRows(parsed)
+    setParseMeta(meta)
     setStatus('preview')
   }
 
@@ -204,6 +207,7 @@ export default function ImportClient() {
   function handleReset() {
     setStatus('idle')
     setRows([])
+    setParseMeta(null)
     setParseErrors([])
     setImportErrors([])
     setImportedCount(0)
@@ -241,6 +245,20 @@ export default function ImportClient() {
           <ul className="list-disc list-inside text-sm text-red-600 space-y-0.5">
             {parseErrors.map((err, i) => <li key={i}>{err}</li>)}
           </ul>
+        </div>
+      )}
+
+      {parseMeta && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+          <p className="font-medium mb-2">自动识别预览</p>
+          <p>数据行数：{parseMeta.dataRowCount}；合并单元格补全：{parseMeta.mergeFillCount} 处</p>
+          <p className="mt-1">
+            表头映射：
+            {Object.entries(parseMeta.recognizedColumns)
+              .filter(([, value]) => Boolean(value))
+              .map(([key, value]) => `${key} ← ${value}`)
+              .join('，') || '未识别到标准映射，请检查表头'}
+          </p>
         </div>
       )}
 

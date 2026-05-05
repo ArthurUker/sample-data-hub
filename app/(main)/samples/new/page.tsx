@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -12,7 +12,12 @@ export default function NewSamplePage() {
   const { profile, loading: authLoading } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftRestored, setDraftRestored] = useState(false)
   const canCreate = profile?.role === 'ADMIN' || profile?.role === 'OPERATOR'
+  const draftKey = useMemo(
+    () => `sample-data-hub:draft:new-sample:${profile?.id ?? 'anonymous'}`,
+    [profile?.id]
+  )
 
   const [form, setForm] = useState({
     id: '',
@@ -24,6 +29,42 @@ export default function NewSamplePage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !canCreate) return
+    const raw = window.localStorage.getItem(draftKey)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as { form?: typeof form }
+      if (parsed.form) {
+        setForm(parsed.form)
+        setDraftRestored(true)
+      }
+    } catch {
+      // Ignore broken draft payload.
+    }
+  }, [draftKey, canCreate])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !canCreate) return
+    const hasAnyValue = Object.values(form).some((v) => String(v).trim() !== '')
+    if (!hasAnyValue) return
+
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(
+        draftKey,
+        JSON.stringify({ form, updatedAt: Date.now() })
+      )
+    }, 500)
+
+    return () => window.clearTimeout(timer)
+  }, [form, draftKey, canCreate])
+
+  function clearDraft() {
+    if (typeof window === 'undefined') return
+    window.localStorage.removeItem(draftKey)
+    setDraftRestored(false)
   }
 
   if (authLoading) {
@@ -82,6 +123,7 @@ export default function NewSamplePage() {
     }
 
     router.push(`/samples/detail?id=${form.id}`)
+    clearDraft()
   }
 
   return (
@@ -90,6 +132,15 @@ export default function NewSamplePage() {
         <h1 className="text-xl font-semibold text-gray-900">新建样本</h1>
         <p className="text-sm text-gray-500 mt-0.5">样本编号全局唯一，创建后不可修改</p>
       </div>
+
+      {draftRestored && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-center justify-between">
+          <span>已恢复上次未提交的录入草稿。</span>
+          <button onClick={clearDraft} className="underline">
+            清空草稿
+          </button>
+        </div>
+      )}
 
       <form
         onSubmit={handleSubmit}
