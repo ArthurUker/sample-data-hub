@@ -61,7 +61,8 @@
   </div>
 
   <script type="module">
-    import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SCHEMA } from './js/config.js'
+    // 动态导入配置（带时间戳以绕过模块缓存，便于本地快速开发）
+    const { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SCHEMA, API_BASE_URL } = await import('./js/config.js?t=' + Date.now())
 
     // 如果已经登录，直接跳转
     const { createClient } = window.supabase
@@ -87,11 +88,11 @@
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault()
-      const email    = document.getElementById('email').value.trim()
+      const identity = document.getElementById('email').value.trim()
       const password = document.getElementById('password').value
 
-      if (!email || !password) {
-        showError('请填写邮箱和密码')
+      if (!identity || !password) {
+        showError('请填写用户名/邮箱和密码')
         return
       }
 
@@ -100,11 +101,37 @@
       errorEl.classList.add('hidden')
 
       try {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-        window.location.replace('./app.html')
+        // 支持两种登录方式：
+        // - 输入包含 @ 的视为邮箱，直接使用 Supabase 客户端登录
+        // - 否则视为用户名，通过后端 POST /api/auth/login（用户名 -> email RPC）获取 tokens，再用 setSession 建立客户端会话
+        if (identity.includes('@')) {
+          const { error } = await supabase.auth.signInWithPassword({ email: identity, password })
+          if (error) throw error
+          window.location.replace('./app.html')
+        } else {
+          // 确保后端地址可用
+          if (!API_BASE_URL || API_BASE_URL.startsWith('PLACEHOLDER')) {
+            throw new Error('后端未配置，请设置 API_BASE_URL 指向后端服务（例如 http://localhost:4000）')
+          }
+          const resp = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: identity, password }),
+          })
+          if (!resp.ok) {
+            // 尝试解析后端错误消息
+            let errMsg = '用户名或密码错误'
+            try { const j = await resp.json(); if (j?.error) errMsg = j.error } catch {}
+            throw new Error(errMsg)
+          }
+          const data = await resp.json()
+          // 使用 Supabase 客户端建立会话
+          const { error: setErr } = await supabase.auth.setSession({ access_token: data.accessToken, refresh_token: data.refreshToken })
+          if (setErr) throw setErr
+          window.location.replace('./app.html')
+        }
       } catch (err) {
-        showError(err.message || '登录失败，请检查邮箱和密码')
+        showError(err.message || '登录失败，请检查用户名/邮箱和密码')
         btn.disabled = false
         btn.textContent = '登录'
       }

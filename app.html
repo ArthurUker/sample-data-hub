@@ -5,52 +5,75 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>样本数据平台</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
   <!-- 库（在 ESM 模块之前同步加载） -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.1/dist/umd/supabase.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <link rel="preconnect" href="https://aitzxizdxgvnicrobqit.supabase.co">
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="app-shell min-h-screen">
 
   <!-- Toast 通知容器 -->
   <div id="toast-container"></div>
 
   <!-- 初始加载屏 -->
-  <div id="loading-screen" class="fixed inset-0 bg-white flex items-center justify-center z-50">
+  <div id="loading-screen" class="fixed inset-0 bg-[#f5f8ff] flex items-center justify-center z-50">
     <div class="text-center">
-      <div class="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-      <p class="text-sm text-gray-400">正在加载…</p>
+      <div class="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+      <p class="text-sm text-slate-500">正在加载系统工作台…</p>
     </div>
   </div>
 
   <!-- 主布局 -->
   <div id="main-layout" class="hidden min-h-screen flex flex-col">
 
-    <!-- 导航栏 -->
-    <header class="bg-white border-b border-gray-200 flex-shrink-0">
-      <div class="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
-        <!-- Logo + 导航 -->
-        <div class="flex items-center gap-6">
-          <span class="font-semibold text-gray-900 text-sm select-none">样本数据平台</span>
-          <nav class="flex gap-1" id="main-nav-links">
-            <a href="#/samples"  data-route="samples"  class="nav-link px-3 py-1.5 text-sm rounded-md transition-colors text-gray-600 hover:bg-gray-100">样本台账</a>
-            <a href="#/review"   data-route="review"   class="nav-link px-3 py-1.5 text-sm rounded-md transition-colors text-gray-600 hover:bg-gray-100 reviewer-only hidden">差异审核</a>
-            <a href="#/new"      data-route="new"      class="nav-link px-3 py-1.5 text-sm rounded-md transition-colors text-gray-600 hover:bg-gray-100 operator-only hidden">数据录入</a>
-            <a href="#/import"   data-route="import"   class="nav-link px-3 py-1.5 text-sm rounded-md transition-colors text-gray-600 hover:bg-gray-100 operator-only hidden">Excel 导入</a>
-          </nav>
+    <header class="app-header flex-shrink-0">
+      <div class="app-header-inner">
+        <div class="app-brand-block">
+          <p class="app-kicker">Ct Comparison Workspace</p>
+          <div class="app-brand-row">
+            <span class="app-brand-dot"></span>
+            <h1 class="app-title">样本数据平台</h1>
+          </div>
+          <p class="app-subtitle">迪奇 × 科艺普 Ct 对比 · 样本台账 · 差异审核一体化工作台</p>
         </div>
-        <!-- 用户信息 -->
-        <div class="flex items-center gap-3 text-sm text-gray-500">
-          <span id="nav-username" class="font-medium text-gray-700"></span>
-          <span id="nav-role" class="text-xs bg-gray-100 px-2 py-0.5 rounded-full"></span>
-          <button id="logout-btn" class="text-gray-400 hover:text-gray-700 transition-colors">退出</button>
+
+        <div class="app-user-panel">
+          <div class="app-user-main">
+            <span id="nav-username" class="app-user-name"></span>
+            <span id="nav-role" class="app-role-pill"></span>
+          </div>
+          <button id="logout-btn" class="app-logout-btn">退出登录</button>
         </div>
+      </div>
+
+      <div class="app-nav-wrap">
+        <nav class="app-nav" id="main-nav-links">
+          <a href="#/compare" data-route="compare" class="nav-link app-nav-link">
+            <span class="nav-step">01</span>
+            <span class="nav-label">Ct 对比工作台</span>
+          </a>
+          <a href="#/samples" data-route="samples" class="nav-link app-nav-link">
+            <span class="nav-step">02</span>
+            <span class="nav-label">样本台账</span>
+          </a>
+          <a href="#/new" data-route="new" class="nav-link app-nav-link operator-only hidden">
+            <span class="nav-step">03</span>
+            <span class="nav-label">数据录入</span>
+          </a>
+          <a href="#/review" data-route="review" class="nav-link app-nav-link reviewer-only hidden">
+            <span class="nav-step">04</span>
+            <span class="nav-label">差异审核</span>
+          </a>
+        </nav>
       </div>
     </header>
 
     <!-- 内容区域 -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6" id="content-area">
+    <main class="flex-1 max-w-[1360px] w-full mx-auto px-4 lg:px-6 py-6" id="content-area">
       <!-- 模块渲染到此处 -->
     </main>
   </div>

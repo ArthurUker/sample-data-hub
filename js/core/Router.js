@@ -20,7 +20,7 @@ export class Router {
     window.addEventListener('hashchange', () => this._dispatch())
     // 首次进入
     if (!location.hash || location.hash === '#') {
-      location.replace('#/samples')
+      location.replace('#/compare')
     } else {
       this._dispatch()
     }

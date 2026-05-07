@@ -9,6 +9,7 @@ import { SampleDetailModule } from './modules/SampleDetail.js'
 import { SampleEditModule }   from './modules/SampleEdit.js'
 import { ImportModule }       from './modules/Import.js'
 import { ReviewModule }       from './modules/Review.js'
+import { ComparisonModule }   from './modules/Comparison.js'
 
 // ── Toast 工具函数（供所有模块使用）─────────────────────────────────────────
 export function showToast(message, type = 'info') {
@@ -27,6 +28,7 @@ function updateNavActive() {
   document.querySelectorAll('.nav-link').forEach((a) => {
     const route = a.dataset.route
     const active = route === hash || (hash === 'sample' && route === 'samples')
+    a.classList.toggle('is-active',      active)
     a.classList.toggle('bg-blue-50',    active)
     a.classList.toggle('text-blue-700', active)
     a.classList.toggle('font-medium',   active)
@@ -68,14 +70,16 @@ async function init() {
   }
 
   // 注册路由模块
-  const samplesModule = new SamplesModule(authService)
-  const detailModule  = new SampleDetailModule(authService)
-  const editModule    = new SampleEditModule(authService)
-  const importModule  = new ImportModule(authService)
-  const reviewModule  = new ReviewModule(authService)
+  const samplesModule    = new SamplesModule(authService)
+  const detailModule     = new SampleDetailModule(authService)
+  const editModule       = new SampleEditModule(authService)
+  const importModule     = new ImportModule(authService)
+  const reviewModule     = new ReviewModule(authService)
+  const comparisonModule = new ComparisonModule()
 
   const content = document.getElementById('content-area')
 
+  router.register('compare', { render: (c)    => comparisonModule.render(c) })
   router.register('samples', { render: (c, p) => samplesModule.render(c, p) })
   router.register('sample',  { render: (c, p) => detailModule.render(c, p) })
   router.register('new',     { render: (c, p) => editModule.render(c, p) })
